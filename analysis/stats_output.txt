@@ -1,0 +1,63 @@
+======================================================================
+STATS COLLECTION
+======================================================================
+
+## 1. Complete-FABLE.5-traces-2M (parquet, sample 50k rows)
+  total rows: 2,006,487  (sampled 60,000 for distribution)
+  top source_dataset:
+     25000  ansulev/claude_mythos_distilled_25k
+     22904  1EYE4ALL/Fable-5-traces
+     12096  armand0e/claude-fable-5-claude-code
+  seen_count distribution: min=2 max=486
+    top seen_count values: [(2, 36840), (4, 15105), (9, 4484), (3, 1961), (6, 1334)]
+
+## 2. Fable-5-traces (fable5_cot_merged.jsonl)
+  rows: 4,665
+  output_type: {'tool_use': 3799, 'text': 866}
+  top tools:
+     3799  ?
+
+## 3. armand0e/claude-fable-5-claude-code
+  files: 63, total rows: 18,370
+  type distribution (top 15):
+      7490  assistant
+      4719  user
+      1010  ai-title
+       965  last-prompt
+       960  mode
+       884  permission-mode
+       806  attachment
+       596  file-history-snapshot
+       376  queue-operation
+       349  system
+       128  bridge-session
+        87  custom-title
+
+## 4. WithinUs 25k
+  rows: 25,000
+  category:
+      7000  cybersecurity
+      5500  advanced_coding
+      3500  agentic_planning
+      3500  general_expert_qa
+      3000  mathematical_reasoning
+      2500  scientific_analysis
+  assistant content length: min=1278 median=1707 max=2119 mean=1706
+
+## 5. lordx64 SFT (parquet)
+  rows: 4659
+  contains <tool_use>: 3858 (82%)
+  contains <think>: 4659 (100%)
+  text length: min=673 median=9783 max=80759 mean=10468
+
+## 6. HelioAI 462x
+Traceback (most recent call last):
+  File "/home/work/.projects/LLM-OS-Models/fable_distillation/analysis/analyze_stats.py", line 144, in <module>
+    obj = json.loads(line)
+          ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/json/__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/json/decoder.py", line 340, in decode
+    raise JSONDecodeError("Extra data", s, end)
+json.decoder.JSONDecodeError: Extra data: line 1 column 220642 (char 220641)

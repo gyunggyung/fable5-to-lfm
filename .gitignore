@@ -1,0 +1,21 @@
+# Datasets (large, downloadable from HF)
+datasets/
+logs/
+*.parquet
+*.jsonl.gz
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
