@@ -1,0 +1,78 @@
+# Fabliq 최종 결과 리포트 (2026-06-24)
+
+> fable5-to-lfm 프로젝트 밤샘 작업 최종 결과.
+
+## 📊 전체 모델 비교표
+
+| 모델 | Base | 데이터 | Epochs | LR | Final Loss | Train Time | HF | GGUF |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| base LFM2.5-8B-A1B | - | - | - | - | - | - | [LiquidAI](https://huggingface.co/LiquidAI/LFM2.5-8B-A1B) | - |
+| ToolBench-Full-SFT-1Epoch | LFM2.5-8B-A1B | ToolBench | 1 | 8e-7 | 0.23 | - | [link](https://huggingface.co/LLM-OS-Models/LFM2.5-8B-A1B-Terminal-ToolBench-Full-SFT-1Epoch) | - |
+| **Fabliq-8B-Agent** (Phase-1) | ToolBench | Fable-5 4,047 | 3 | 5e-7 | 1.277 | 14min | [link](https://huggingface.co/LLM-OS-Models/Fabliq-8B-Agent) | ✅ |
+| **Fabliq-8B-Agent-Reasoning** (Phase-2) | Phase-1 | + WithinUs+Helio 281 | 4 | 3e-7 | ~1.6 | 6min | [link](https://huggingface.co/LLM-OS-Models/Fabliq-8B-Agent-Reasoning) | ✅ |
+| **Fabliq-8B-Agent-FromBase** (Phase-1B) | LFM2.5-8B-A1B | Fable-5 4,047 | 3 | 1e-6 | - | 14min | [link](https://huggingface.co/LLM-OS-Models/Fabliq-8B-Agent-FromBase) | ✅ |
+| **Fabliq-8B-Agent-FromBase-Reasoning** (Phase-2B) | Phase-1B | + reasoning 281 | 4 | 3e-7 | - | 6min | [link](https://huggingface.co/LLM-OS-Models/Fabliq-8B-Agent-FromBase-Reasoning) | - |
+| **Fabliq-8B-Agent-Mega** (Mega) | LFM2.5-8B-A1B | 모든 데이터 4,328 | 3 | 1e-6 | 1.236 | 17min | [link](https://huggingface.co/LLM-OS-Models/Fabliq-8B-Agent-Mega) | ✅ |
+| **Fabliq-8B-Agent-Mega-Reasoning** (Phase-2M) | Mega | + reasoning 281 | 2 | 2e-7 | - | 5min | [link](https://huggingface.co/LLM-OS-Models/Fabliq-8B-Agent-Mega-Reasoning) | ✅ |
+| **Fabliq-8B-Agent-Mega-1ep** (1ep ablation) | LFM2.5-8B-A1B | 모든 데이터 4,328 | 1 | 1e-6 | 1.35 | 7min | [link](https://huggingface.co/LLM-OS-Models/Fabliq-8B-Agent-Mega-1ep) | - |
+| **Fabliq-8B-Agent-Mega-5ep** (5ep ablation) | LFM2.5-8B-A1B | 모든 데이터 4,328 | 5 | 1e-6 | - | - | - | - |
+| **Fabliq-8B-Agent-Mega-10ep** (10ep ablation) | LFM2.5-8B-A1B | 모든 데이터 4,328 | 10 | 5e-7 | - | - | - | - |
+
+## 🎯 주요 발견
+
+### 1. ToolBench Foundation 효과
+- Phase-1 (ToolBench → Fable-5) vs Phase-1B (Base → Fable-5) 비교
+- (eval 결과로 채울 예정)
+
+### 2. Reasoning Expansion 효과
+- Phase-2 (Phase-1 + reasoning) vs Phase-1
+- (eval 결과로 채울 예정)
+
+### 3. Single-Pass Mega vs Multi-Phase
+- Mega (한 번에 모든 데이터) vs Phase-1+Phase-2 (단계적)
+- Mega final loss 1.236 vs Phase-1 final loss 1.277 → Mega가 약간 더 나음
+
+### 4. Epoch 영향
+- 1ep, 3ep, 5ep, 10ep 비교
+- (eval 결과로 채울 예정)
+
+## 📦 데이터셋 인벤토리
+
+| 데이터셋 | 원본 행 수 | 전처리 후 | 사용 |
+| --- | --- | --- | --- |
+| Glint-Research/Fable-5-traces | 4,665 | 4,047 | Phase-1, Phase-1B, Mega |
+| WithinUsAI/claude_mythos_distilled_25k | 25,000 | 135 (dedup) | Phase-2, Phase-2B, Phase-2M, Mega |
+| HelioAI/Fable-5-Distill-Reasoning-462x | 462 | 146 (Russian filter) | Phase-2, Phase-2B, Phase-2M, Mega |
+| Glint-Research/Complete-FABLE.5-traces-2M | 2,006,487 | 3,866 → 모두 Fable-5 중복 | 미사용 |
+| armand0e/claude-fable-5-claude-code | 18,370 | raw events (미처리) | 미사용 |
+| lordx64/agentic-distill-fable-5-sft | 4,659 | Glint 중복 | 미사용 |
+
+**최종 unique 데이터**: 4,328 rows (Fable-5 + WithinUs + Helio)
+
+## 🔬 GGUF 라인업
+
+| 모델 | Q4_K_M | Q5_K_M | Q6_K | Q8_0 |
+| --- | --- | --- | --- | --- |
+| Fabliq-8B-Agent | 4.9G | 5.7G | 6.5G | 8.4G |
+| Fabliq-8B-Agent-Reasoning | 4.9G | 5.7G | 6.5G | 8.4G |
+| Fabliq-8B-Agent-FromBase | 4.9G | 5.7G | 6.5G | 8.4G |
+| Fabliq-8B-Agent-Mega | 4.9G | 5.7G | 6.5G | 8.4G |
+| Fabliq-8B-Agent-Mega-Reasoning | 4.9G | 5.7G | 6.5G | 8.4G |
+
+## ⚠️ 알려진 이슈
+
+1. **vLLM ABI 손상**: 시스템의 모든 vllm env에서 `undefined symbol: _ZN3c101...` 에러. torch ABI 변경으로 vllm._C가 로드 안 됨. 벤치마크 eval (MMLU, HumanEval)이 transformers backend로만 가능해서 느림.
+2. **2M 데이터 중복**: Complete-FABLE.5-traces-2M은 Glint가 Fable-5를 재포장한 것. 새 데이터 없음.
+3. **WithinUs 템플릿 반복**: 25k → 135 unique (template overfitting 심함).
+4. **러시아어 필터**: Helio 462 → 146 (70% 러시아어 행).
+
+## 🚀 추천 모델
+
+- **터미널 에이전트용**: `Fabliq-8B-Agent` 또는 `Fabliq-8B-Agent-Mega`
+- **Reasoning + 터미널**: `Fabliq-8B-Agent-Reasoning` 또는 `Fabliq-8B-Agent-Mega-Reasoning`
+- **로컬推論 (16GB VRAM)**: GGUF Q4_K_M (4.9G) 또는 Q5_K_M (5.7G)
+- **로컬推論 (24GB VRAM)**: GGUF Q8_0 (8.4G)
+
+## 📜 라이선스
+
+Apache 2.0 (LiquidAI LFM2.5-8B-A1B base 상속).
