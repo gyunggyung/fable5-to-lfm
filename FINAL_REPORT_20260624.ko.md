@@ -29,7 +29,7 @@
 | Fabliq-1.2B-Thinking-Agent | LFM2.5-1.2B-Thinking | Fable-5 4,047 | ~1.55 | Thinking base |
 | Fabliq-1.2B-Thinking-Agent-Mega | LFM2.5-1.2B-Thinking | 4,328 | 1.613 | Thinking + Mega data |
 | Fabliq-1.2B-Agent-Base | LFM2.5-1.2B-Base | 4,328 | 1.554 | raw base, no instruct |
-| Fabliq-1.2B-Agent-JP | LFM2.5-1.2B-JP | 4,328 | (training) | Japanese base |
+| Fabliq-1.2B-Agent-JP | LFM2.5-1.2B-JP | 4,328 | 1.549 | Japanese base |
 
 ### 2.6B Variant
 
