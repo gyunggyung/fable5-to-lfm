@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from datetime import datetime
@@ -65,6 +66,41 @@ def model_device(model: torch.nn.Module) -> torch.device:
         return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+def cuda_diagnostics() -> dict[str, Any]:
+    info: dict[str, Any] = {
+        "event": "cuda_diagnostics",
+        "torch": torch.__version__,
+        "cuda_available": torch.cuda.is_available(),
+        "cuda_device_count": torch.cuda.device_count(),
+        "torch_cuda": torch.version.cuda,
+        "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES", ""),
+    }
+    if torch.cuda.is_available():
+        info["current_device"] = torch.cuda.current_device()
+        info["device_name"] = torch.cuda.get_device_name(torch.cuda.current_device())
+    return info
+
+
+def normalize_decoded_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "\n".join(str(item) for item in value)
+    return str(value)
+
+
+def strip_decoded_prompt(text: str, prompt_text: str) -> str:
+    for candidate in (prompt_text, prompt_text.strip()):
+        if candidate and text.startswith(candidate):
+            text = text[len(candidate):]
+            break
+    if "\nmodel\n" in text:
+        text = text.rsplit("\nmodel\n", 1)[-1]
+    elif text.startswith("model\n"):
+        text = text[len("model\n"):]
+    return text.strip()
+
+
 @torch.no_grad()
 def generate_one(
     model: torch.nn.Module,
@@ -86,8 +122,17 @@ def generate_one(
     start = time.time()
     output = model.generate(**inputs, max_new_tokens=max_new_tokens)
     elapsed = time.time() - start
-    generated = output[0][prompt_len:]
-    text = processor.decode(generated, skip_special_tokens=True)
+    output_ids = output[0]
+    input_ids = inputs["input_ids"][0]
+    if output_ids.shape[-1] > prompt_len and torch.equal(output_ids[:prompt_len], input_ids):
+        generated = output_ids[prompt_len:]
+    else:
+        generated = output_ids
+    text = normalize_decoded_text(processor.decode(generated, skip_special_tokens=True))
+    if not text.strip() and generated.numel():
+        text = normalize_decoded_text(processor.decode(generated, skip_special_tokens=False))
+    prompt_text = normalize_decoded_text(processor.decode(input_ids, skip_special_tokens=True))
+    text = strip_decoded_prompt(text, prompt_text)
     return text.strip(), int(generated.numel()), elapsed
 
 
@@ -109,15 +154,33 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    print(json.dumps(cuda_diagnostics(), ensure_ascii=False), flush=True)
+    device_map: str | dict[str, int]
+    if torch.cuda.is_available():
+        device_map = {"": torch.cuda.current_device()}
+    else:
+        device_map = "auto"
+
     load_start = time.time()
     model = DiffusionGemmaForBlockDiffusion.from_pretrained(
         args.model,
         dtype="auto",
-        device_map="auto",
+        device_map=device_map,
         trust_remote_code=True,
     ).eval()
     processor = AutoProcessor.from_pretrained(args.model, trust_remote_code=True)
     load_time = time.time() - load_start
+    print(
+        json.dumps(
+            {
+                "event": "model_loaded",
+                "load_time_sec": round(load_time, 2),
+                "device": str(model_device(model)),
+            },
+            ensure_ascii=False,
+        ),
+        flush=True,
+    )
 
     result: dict[str, Any] = {
         "model": args.model,
@@ -170,7 +233,19 @@ def main() -> None:
                     "output_tokens": tokens,
                 }
             )
-            print(json.dumps({"idx": idx, "steps": len(rows), "elapsed_sec": round(elapsed, 3)}, ensure_ascii=False), flush=True)
+            print(
+                json.dumps(
+                    {
+                        "idx": idx,
+                        "steps": len(rows),
+                        "elapsed_sec": round(elapsed, 3),
+                        "output_tokens": tokens,
+                        "blank_output": not bool(pred_text.strip()),
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
         gen_time = time.time() - start_all
         result["tb2"] = {
             "eval_path": args.eval_path,

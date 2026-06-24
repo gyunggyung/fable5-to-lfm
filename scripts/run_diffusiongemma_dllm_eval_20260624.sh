@@ -18,7 +18,10 @@ cd "$ROOT_DIR"
 
 RUN_NOW="${RUN_NOW:-0}"
 RUN_ID="${RUN_ID:-20260624_diffusiongemma_dllm_base_transformers}"
-DEFAULT_VLLM_ENV="$FABLE_DIR/.venvs/diffusiongemma-vllm"
+DEFAULT_VLLM_ENV="$FABLE_DIR/.venvs/diffusiongemma-transformers-cu128"
+if [[ ! -x "$DEFAULT_VLLM_ENV/bin/python" ]]; then
+  DEFAULT_VLLM_ENV="$FABLE_DIR/.venvs/diffusiongemma-vllm"
+fi
 if [[ ! -x "$DEFAULT_VLLM_ENV/bin/python" ]]; then
   DEFAULT_VLLM_ENV="$ROOT_DIR/.vllm-lfm-cu12"
 fi
@@ -67,6 +70,15 @@ base_env=(
   VLLM_WORKER_MULTIPROC_METHOD=spawn
   LD_LIBRARY_PATH="$VLLM_LD_LIBRARY_PATH"
   CUDA_VISIBLE_DEVICES="$GPU"
+)
+transformers_base_env=(
+  env -u PYTHONPATH
+  PYTHONNOUSERSITE=1
+  PYTHONUNBUFFERED=1
+  TOKENIZERS_PARALLELISM=false
+  PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+  HF_DEACTIVATE_ASYNC_LOAD=1
+  LD_LIBRARY_PATH="$VLLM_LD_LIBRARY_PATH"
 )
 
 build_probe_cmd=(
@@ -142,7 +154,7 @@ if [[ "$BACKEND" == "offline_vllm" ]]; then
   print_cmd "long probe" "${probe_cmd[@]}"
 elif [[ "$BACKEND" == "transformers" ]]; then
   transformers_cmd=(
-    env -u PYTHONPATH PYTHONNOUSERSITE=1 CUDA_VISIBLE_DEVICES="$GPU"
+    "${transformers_base_env[@]}" CUDA_VISIBLE_DEVICES="$GPU"
     "$VLLM_ENV/bin/python" "$FABLE_DIR/scripts/diffusiongemma_transformers_eval.py"
     --model "$MODEL_PATH"
     --model-short "$MODEL_SHORT"
@@ -228,7 +240,7 @@ elif [[ "$BACKEND" == "transformers" ]]; then
     for shard_idx in $(seq 0 $((TRANSFORMERS_SHARD_COUNT - 1))); do
       shard_model_short="$(printf '%s.part%02d' "$MODEL_SHORT" "$shard_idx")"
       shard_log="$(printf '%s/%s.transformers.part%02d.log' "$LOG_DIR" "$MODEL_SHORT" "$shard_idx")"
-      env -u PYTHONPATH PYTHONNOUSERSITE=1 CUDA_VISIBLE_DEVICES="${shard_gpus[$shard_idx]}" \
+      "${transformers_base_env[@]}" CUDA_VISIBLE_DEVICES="${shard_gpus[$shard_idx]}" \
         "$VLLM_ENV/bin/python" "$FABLE_DIR/scripts/diffusiongemma_transformers_eval.py" \
           --model "$MODEL_PATH" \
           --model-short "$shard_model_short" \
@@ -260,7 +272,7 @@ elif [[ "$BACKEND" == "transformers" ]]; then
       --model-short "$MODEL_SHORT" \
       2>&1 | tee "$LOG_DIR/${MODEL_SHORT}.merge.log"
     if [[ "$RUN_PROBE" == "1" ]]; then
-      env -u PYTHONPATH PYTHONNOUSERSITE=1 CUDA_VISIBLE_DEVICES="${shard_gpus[0]}" \
+      "${transformers_base_env[@]}" CUDA_VISIBLE_DEVICES="${shard_gpus[0]}" \
         "$VLLM_ENV/bin/python" "$FABLE_DIR/scripts/diffusiongemma_transformers_eval.py" \
           --model "$MODEL_PATH" \
           --model-short "${MODEL_SHORT}.probe" \

@@ -13,6 +13,7 @@ FABLE_DIR="$ROOT_DIR/fable_distillation"
 cd "$ROOT_DIR"
 
 RUN_NOW="${RUN_NOW:-0}"
+SKIP_BUILD_DATASET="${SKIP_BUILD_DATASET:-0}"
 TRAIN_ENV="${TRAIN_ENV:-$ROOT_DIR/.liquid-sft-env}"
 MODEL_PRESET="${MODEL_PRESET:-gemma4_12b_it}"
 RUN_ID="${RUN_ID:-20260624_${MODEL_PRESET}_hermes_fable_smoke}"
@@ -20,6 +21,7 @@ TRAIN_JSONL="${TRAIN_JSONL:-$FABLE_DIR/datasets/hermes_agent_traces_chat_2026062
 TRAIN_META="${TRAIN_META:-$FABLE_DIR/datasets/hermes_agent_traces_chat_20260624.meta.json}"
 OUTPUT_BASE="${OUTPUT_BASE:-/home/work/.data/harness1/models}"
 LOG_DIR="${LOG_DIR:-$FABLE_DIR/logs/$RUN_ID}"
+TOKENIZED_CACHE_DIR="${TOKENIZED_CACHE_DIR:-$FABLE_DIR/.cache/tokenized/$RUN_ID}"
 
 TRAIN_GPUS="${TRAIN_GPUS:-0,1,2,3,4,5,6,7}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
@@ -37,16 +39,19 @@ case "$MODEL_PRESET" in
   gemma4_12b_it)
     MODEL_PATH="${MODEL_PATH:-google/gemma-4-12B-it}"
     MODEL_CLASS="${MODEL_CLASS:-multimodal-lm}"
+    CHAT_SERIALIZATION="${CHAT_SERIALIZATION:-native}"
     CHAT_TEMPLATE_KWARGS_JSON="${CHAT_TEMPLATE_KWARGS_JSON:-{\"enable_thinking\": false}}"
     ;;
   qwen35_9b)
     MODEL_PATH="${MODEL_PATH:-Qwen/Qwen3.5-9B}"
     MODEL_CLASS="${MODEL_CLASS:-image-text-to-text}"
+    CHAT_SERIALIZATION="${CHAT_SERIALIZATION:-simple-chatml}"
     CHAT_TEMPLATE_KWARGS_JSON="${CHAT_TEMPLATE_KWARGS_JSON:-{}}"
     ;;
   *)
     : "${MODEL_PATH:?MODEL_PATH is required for custom MODEL_PRESET}"
     MODEL_CLASS="${MODEL_CLASS:-multimodal-lm}"
+    CHAT_SERIALIZATION="${CHAT_SERIALIZATION:-native}"
     CHAT_TEMPLATE_KWARGS_JSON="${CHAT_TEMPLATE_KWARGS_JSON:-{}}"
     ;;
 esac
@@ -87,8 +92,13 @@ train_cmd=(
   --logging-steps 1
   --lora-rank "$LORA_RANK"
   --lora-alpha "$LORA_ALPHA"
+  --chat-serialization "$CHAT_SERIALIZATION"
   --chat-template-kwargs-json "$CHAT_TEMPLATE_KWARGS_JSON"
 )
+
+if [[ -n "$TOKENIZED_CACHE_DIR" ]]; then
+  train_cmd+=(--tokenized-cache-dir "$TOKENIZED_CACHE_DIR")
+fi
 
 print_cmd() {
   local label="$1"
@@ -98,12 +108,16 @@ print_cmd() {
   printf '\n'
 }
 
-printf 'run_id=%s\nmodel=%s\noutput=%s\nlog_dir=%s\n' "$RUN_ID" "$MODEL_PATH" "$OUTPUT_DIR" "$LOG_DIR"
+printf 'run_id=%s\nmodel=%s\noutput=%s\nlog_dir=%s\ntokenized_cache=%s\n' "$RUN_ID" "$MODEL_PATH" "$OUTPUT_DIR" "$LOG_DIR" "$TOKENIZED_CACHE_DIR"
 print_cmd "dataset command" "${build_dataset_cmd[@]}"
 print_cmd "train command" "${train_cmd[@]}"
 
 if [[ "$RUN_NOW" == "1" ]]; then
-  "${build_dataset_cmd[@]}" 2>&1 | tee "$LOG_DIR/build_dataset.log"
+  if [[ "$SKIP_BUILD_DATASET" == "1" ]]; then
+    echo "skip dataset build: TRAIN_JSONL=$TRAIN_JSONL" | tee "$LOG_DIR/build_dataset.log"
+  else
+    "${build_dataset_cmd[@]}" 2>&1 | tee "$LOG_DIR/build_dataset.log"
+  fi
   "${train_cmd[@]}" 2>&1 | tee "$LOG_DIR/train.log"
 else
   echo "DRY-RUN. Set RUN_NOW=1 to execute."

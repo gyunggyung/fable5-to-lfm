@@ -24,15 +24,19 @@
 
 핵심 결론: **ToolBench foundation + Fable terminal traces 조합이 raw-base Mega 학습보다 터미널 next-action에서 훨씬 낫다.** 최저 train loss가 최고 agentic 점수를 의미하지 않았다.
 
-현재 진행 중인 GLM-5.2 추격 실험:
+현재 2026-06-24 실험 상태:
 
 - 실행 스크립트: `scripts/run_glm52_chaser_mix_sft_20260624.sh`
 - 학습 데이터: `datasets/glm52_chaser_terminal_toolmix_20260624.jsonl` (11,416 rows)
 - 베이스 모델: `Fabliq-8B-Agent-Reasoning`
-- 목표: 현재 TB2-lite vLLM 점수 `51.59` 돌파
+- 상태: full SFT 완료. 출력 모델은 `/home/work/.data/harness1/models/LFM2.5-8B-A1B__Terminal-GLM52-Chaser-Mix-FullSFT-20260624`; final model은 sharded vLLM TB2-lite에서 `51.13`.
+- 목표: 현재 TB2-lite vLLM 점수 `51.59` 돌파.
 - 멀티모델 준비: Gemma 4 12B IT, Qwen3.5 9B, DiffusionGemma 26B-A4B smoke runner를 `scripts/`, `configs/` 아래에 준비
-- DiffusionGemma 우선순위: dLLM base 평가를 Gemma/Qwen smoke보다 먼저 실행. Docker는 쓰지 않고, 로컬 uv 가상환경의 Transformers `DiffusionGemmaForBlockDiffusion` backend를 GPU shard 방식으로 돌린다.
-- 문서: [TB2 vLLM benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md), [GLM-5.2 chaser experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md), [multi-model GLM-5.2 chaser plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md), [DiffusionGemma dLLM eval plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md)
+- Qwen3.5-9B base vLLM fallback은 TB2-lite 32k sharded 평가에서 `36.75`로 완료.
+- DiffusionGemma 우선순위: dLLM base 평가는 Docker 없이 로컬 `diffusiongemma-transformers-cu128` uv 가상환경의 Transformers `DiffusionGemmaForBlockDiffusion` backend로 성공. 첫 0점 run 이후 decode/prompt stripping 버그를 고쳤고, 수정 full run은 score `25.12`, probe `97.88 tok/s`. 결론은 실행 성공/성능 실패다.
+- GLM-5.2 chaser `checkpoint-1400` vLLM sharded TB2-lite 평가는 완료. score `50.56`으로 final `51.13`보다 낮아 현 1위 `51.59`는 못 넘었다.
+- Qwen3.5-9B LoRA SFT300은 Qwen native chat template 실패 후 `simple-chatml` 직렬화로 재시작했다. 현재 run id는 `20260624_qwen35_9b_glm52_terminalmix_lora_sft300_chatml`.
+- 문서: [현재 실험 상태](./CURRENT_EXPERIMENT_STATUS_20260624.ko.md), [TB2 vLLM benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md), [GLM-5.2 chaser experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md), [multi-model GLM-5.2 chaser plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md), [DiffusionGemma dLLM eval plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md)
 
 ---
 
@@ -147,7 +151,8 @@ TB2-lite vLLM 근거:
 - `run_multifamily_sft_smoke_20260624.sh` — Gemma/Qwen LoRA smoke SFT queue
 - `run_diffusiongemma_fable_lora_20260624.sh` — DiffusionGemma NeMo AutoModel LoRA smoke queue
 - `run_post_chaser_multimodel_queue_20260624.sh` — 현재 chaser run 종료 후 DiffusionGemma 평가/스모크를 먼저 실행하고 Gemma/Qwen을 이어서 실행하는 watcher
-- `setup_diffusiongemma_vllm_uv_20260624.sh` — DiffusionGemma Transformers 평가용 isolated uv env 준비 스크립트, vLLM wheel은 향후 직접 지원 대비용
+- `setup_diffusiongemma_transformers_uv_20260624.sh` — DiffusionGemma Transformers 평가용 torch cu128 isolated uv env 준비 스크립트
+- `setup_diffusiongemma_vllm_uv_20260624.sh` — 향후 vLLM 직접 지원 대비용 env 스크립트. 현재 무도커 dLLM run에는 쓰지 않음
 - `replay_eval_vllm.py`, `replay_metrics.py`, `summarize_replay_results.py` — local replay evaluator
 
 ### 학습 코드 (`training/`)
@@ -200,6 +205,7 @@ Apache 2.0 (LiquidAI LFM base 상속).
 - [GLM-5.2 추격 실험](./GLM52_CHASER_EXPERIMENT_20260624.ko.md)
 - [Multi-model GLM-5.2 추격 계획](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md)
 - [DiffusionGemma dLLM 평가 계획](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md)
+- [현재 실험 상태](./CURRENT_EXPERIMENT_STATUS_20260624.ko.md)
 - [진행 상황 타임라인](./PROGRESS_20260623.ko.md)
 - [데이터 소스 상세](./DATA_SOURCES_20260623.ko.md)
 - [후속 작업 계획](./NEXT_STEPS_20260623.ko.md)

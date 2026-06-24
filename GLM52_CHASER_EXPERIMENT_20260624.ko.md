@@ -39,7 +39,7 @@ GLM-5.2는 753B급 공개 모델이고, 모델 카드에서 1M context, long-hor
 
 - `fable_distillation/TB2_VLLM_BENCHMARK_20260624.ko.md`
 
-## 현재 실행 중인 실험
+## 실험 상태
 
 실험명:
 
@@ -59,12 +59,7 @@ GLM-5.2는 753B급 공개 모델이고, 모델 카드에서 1M context, long-hor
 fable_distillation/scripts/run_glm52_chaser_mix_sft_20260624.sh
 ```
 
-현재 PID:
-
-```text
-launcher pid: 2885269
-torchrun pid: 2885773
-```
+상태: full SFT 완료. `final_model` 및 `checkpoint-1400` vLLM TB2-lite sharded 평가 완료.
 
 로그:
 
@@ -95,12 +90,21 @@ nvidia-smi
 | Global batch | 64 |
 | Save steps | 100 |
 
-학습이 끝나면 런처가 자동으로 vLLM TB2-lite 평가를 실행한다.
+결과:
 
-예상 결과 위치:
+| Model | Score | Cmd F1 | First Cmd | Valid JSON |
+| --- | ---: | ---: | ---: | ---: |
+| `phase2-reasoning` 기준선 | 51.59 | 0.5193 | 50.8% | 76.2% |
+| `glm52-chaser-mix-vllm` final | 51.13 | 0.5153 | 50.2% | 75.6% |
+| `glm52-chaser-ckpt1400-vllm` | 50.56 | 0.5046 | 50.8% | 76.2% |
+
+해석: final model은 기준선에 0.46점 모자라서 1위를 넘지는 못했다. `checkpoint-1400`은 final보다 낮아 이 run 안에서는 더 좋은 중간 checkpoint를 아직 찾지 못했다.
+
+결과 위치:
 
 ```text
-fable_distillation/benchmarks/20260624_glm52_chaser_mix_tb2_vllm/results/SUMMARY.md
+fable_distillation/benchmarks/20260624_glm52_chaser_mix_tb2_vllm_sharded/results/glm52-chaser-mix-vllm.json
+fable_distillation/benchmarks/20260624_glm52_chaser_ckpt1400_tb2_vllm_sharded/results/glm52-chaser-ckpt1400-vllm.json
 ```
 
 ## 데이터 믹스
@@ -173,8 +177,9 @@ Terminal-Bench public task 자체는 benchmark contamination 위험이 있으므
 
 1. 지금 돌고 있는 full SFT 결과를 TB2-lite로 평가한다.
 2. 이긴 checkpoint가 있으면 해당 checkpoint를 기준 모델로 고정한다.
-3. 못 이기면 checkpoint-100/200/300을 vLLM으로 따로 평가해서 overfit 전 peak를 찾는다.
-4. 그 다음 Hermes/Kimi/GLM tool traces를 변환해 낮은 LR 추가 SFT를 건다.
+3. 못 이기면 checkpoint-100/200/300 또는 더 이른 저장점을 vLLM으로 따로 평가해서 overfit 전 peak를 찾는다.
+4. 현재는 Qwen3.5-9B base가 낮으므로 terminal/tool-call mix LoRA를 먼저 돌린다. Qwen native chat template은 `user`가 없는 Fable terminal replay 샘플에서 실패했기 때문에 `simple-chatml` 직렬화로 재시작했다.
+5. 그 다음 Hermes/Kimi/GLM tool traces를 변환해 낮은 LR 추가 SFT를 건다.
 5. 마지막으로 Terminal-Bench 스타일 reward를 붙인 offline preference/RL을 설계한다.
 
 ## 판정 기준

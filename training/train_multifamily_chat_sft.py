@@ -11,11 +11,13 @@ import argparse
 import json
 import os
 import random
+import shutil
+import time
 from pathlib import Path
 from typing import Any
 
 import torch
-from datasets import load_dataset
+from datasets import load_dataset, load_from_disk
 from peft import LoraConfig, PeftModel, get_peft_model
 from transformers import (
     AutoModelForCausalLM,
@@ -38,6 +40,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--train-jsonl", required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument(
+        "--tokenized-cache-dir",
+        default="",
+        help="Optional shared tokenized dataset cache. Useful under torchrun to avoid N ranks re-tokenizing the same data.",
+    )
     parser.add_argument("--sft-adapter-path", default="")
     parser.add_argument("--max-seq-length", type=int, default=8192)
     parser.add_argument("--max-train-rows", type=int, default=0)
@@ -57,6 +64,12 @@ def parse_args() -> argparse.Namespace:
         "--chat-template-kwargs-json",
         default="{}",
         help='Extra kwargs for apply_chat_template, e.g. {"enable_thinking": false}.',
+    )
+    parser.add_argument(
+        "--chat-serialization",
+        choices=("native", "simple-chatml"),
+        default="native",
+        help="Use the model chat template, or a conservative ChatML serializer for replay/tool traces.",
     )
     parser.add_argument("--lora-rank", type=int, default=32)
     parser.add_argument("--lora-alpha", type=int, default=64)
@@ -102,6 +115,27 @@ def load_template_kwargs(raw_config: str) -> dict[str, Any]:
     return parsed
 
 
+def process_rank() -> int:
+    return int(os.environ.get("RANK") or os.environ.get("LOCAL_RANK") or "0")
+
+
+def acquire_file_lock(lock_path: Path) -> int | None:
+    try:
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        return None
+    os.write(fd, f"{os.getpid()}\n".encode("utf-8"))
+    return fd
+
+
+def wait_for_tokenized_cache(cache_dir: Path, lock_path: Path) -> None:
+    success_path = cache_dir / "_SUCCESS"
+    while not success_path.exists():
+        if not lock_path.exists():
+            break
+        time.sleep(5)
+
+
 def load_template_backend(model_path: str) -> tuple[Any, Any]:
     """Return (template_backend, tokenizer).
 
@@ -141,6 +175,45 @@ def apply_chat_template(
     if result and isinstance(result[0], list):
         result = result[0]
     return list(result)
+
+
+def stringify_content(content: Any) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    return json.dumps(content, ensure_ascii=False, separators=(",", ":"))
+
+
+def render_simple_chatml(messages: list[dict[str, Any]], *, add_generation_prompt: bool) -> str:
+    chunks: list[str] = []
+    for message in messages:
+        role = str(message.get("role") or "user")
+        content = stringify_content(message.get("content"))
+        chunks.append(f"<|im_start|>{role}\n{content}<|im_end|>\n")
+    if add_generation_prompt:
+        chunks.append("<|im_start|>assistant\n")
+    return "".join(chunks)
+
+
+def encode_chat_messages(
+    backend: Any,
+    tokenizer: Any,
+    messages: list[dict[str, Any]],
+    *,
+    add_generation_prompt: bool,
+    chat_serialization: str,
+    template_kwargs: dict[str, Any],
+) -> list[int]:
+    if chat_serialization == "simple-chatml":
+        rendered = render_simple_chatml(messages, add_generation_prompt=add_generation_prompt)
+        return list(tokenizer.encode(rendered, add_special_tokens=False))
+    return apply_chat_template(
+        backend,
+        messages,
+        add_generation_prompt=add_generation_prompt,
+        template_kwargs=template_kwargs,
+    )
 
 
 def load_model(args: argparse.Namespace) -> torch.nn.Module:
@@ -185,16 +258,20 @@ def main() -> None:
         if not isinstance(messages, list) or len(messages) < 2:
             raise ValueError("row must contain at least two chat messages")
         prompt_messages = messages[:-1]
-        full_ids = apply_chat_template(
+        full_ids = encode_chat_messages(
             template_backend,
+            tokenizer,
             messages,
             add_generation_prompt=False,
+            chat_serialization=args.chat_serialization,
             template_kwargs=template_kwargs,
         )
-        prompt_ids = apply_chat_template(
+        prompt_ids = encode_chat_messages(
             template_backend,
+            tokenizer,
             prompt_messages,
             add_generation_prompt=True,
+            chat_serialization=args.chat_serialization,
             template_kwargs=template_kwargs,
         )
         if len(full_ids) > args.max_seq_length:
@@ -207,7 +284,36 @@ def main() -> None:
         labels[: min(prompt_len, len(labels))] = [-100] * min(prompt_len, len(labels))
         return {"input_ids": full_ids, "attention_mask": [1] * len(full_ids), "labels": labels}
 
-    tokenized = dataset.map(encode, remove_columns=dataset.column_names, num_proc=1)
+    def build_tokenized_dataset():
+        return dataset.map(encode, remove_columns=dataset.column_names, num_proc=1)
+
+    if args.tokenized_cache_dir:
+        cache_dir = Path(args.tokenized_cache_dir)
+        success_path = cache_dir / "_SUCCESS"
+        lock_path = cache_dir.parent / f"{cache_dir.name}.lock"
+        cache_dir.parent.mkdir(parents=True, exist_ok=True)
+        if success_path.exists():
+            tokenized = load_from_disk(str(cache_dir))
+        else:
+            lock_fd = acquire_file_lock(lock_path)
+            if lock_fd is None:
+                wait_for_tokenized_cache(cache_dir, lock_path)
+                if not success_path.exists():
+                    lock_fd = acquire_file_lock(lock_path)
+            if lock_fd is not None:
+                try:
+                    if cache_dir.exists() and not success_path.exists():
+                        shutil.rmtree(cache_dir)
+                    tokenized = build_tokenized_dataset()
+                    tokenized.save_to_disk(str(cache_dir))
+                    success_path.write_text("ok\n")
+                finally:
+                    os.close(lock_fd)
+                    lock_path.unlink(missing_ok=True)
+            else:
+                tokenized = load_from_disk(str(cache_dir))
+    else:
+        tokenized = build_tokenized_dataset()
 
     def collate(features: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
         max_len = max(len(item["input_ids"]) for item in features)

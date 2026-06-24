@@ -24,15 +24,19 @@ TB2-lite replay evaluation is now the primary local regression benchmark. It is 
 
 Main takeaway: **ToolBench foundation + Fable terminal traces beat raw-base Mega training on terminal next-action behavior.** Lowest training loss did not produce the best agentic score.
 
-Current GLM-5.2 chaser run:
+Current 2026-06-24 experiment status:
 
 - Running script: `scripts/run_glm52_chaser_mix_sft_20260624.sh`
 - Training data: `datasets/glm52_chaser_terminal_toolmix_20260624.jsonl` (11,416 rows)
 - Base model: `Fabliq-8B-Agent-Reasoning`
-- Goal: beat the current TB2-lite vLLM score `51.59`
+- Status: full SFT completed at `/home/work/.data/harness1/models/LFM2.5-8B-A1B__Terminal-GLM52-Chaser-Mix-FullSFT-20260624`; final model scored `51.13` on sharded vLLM TB2-lite.
+- Goal: beat the current TB2-lite vLLM score `51.59`.
 - Multi-model setup: Gemma 4 12B IT, Qwen3.5 9B, and DiffusionGemma 26B-A4B smoke runners are staged under `scripts/` and `configs/`.
-- DiffusionGemma priority: dLLM base eval now runs before Gemma/Qwen smoke jobs. Docker is not used; the default path is the local uv env plus Transformers `DiffusionGemmaForBlockDiffusion`, sharded across GPUs for TB2-lite.
-- Docs: [TB2 vLLM benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md), [GLM-5.2 chaser experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md), [multi-model GLM-5.2 chaser plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md), [DiffusionGemma dLLM eval plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md)
+- Qwen3.5-9B base vLLM fallback completed with score `36.75` on TB2-lite 32k sharded eval.
+- DiffusionGemma dLLM base eval succeeded without Docker through the local `diffusiongemma-transformers-cu128` uv env plus Transformers `DiffusionGemmaForBlockDiffusion`. A decode/prompt-stripping bug was fixed after a 0-score first run; the corrected full run scored `25.12` with `97.88 tok/s` on the probe. The status is execution success but benchmark failure.
+- GLM-5.2 chaser `checkpoint-1400` vLLM sharded TB2-lite eval completed at `50.56`, below both final `51.13` and the current best `51.59`.
+- Qwen3.5-9B LoRA SFT300 was restarted with `simple-chatml` serialization after the native Qwen chat template rejected assistant-only Fable replay samples. Current run id: `20260624_qwen35_9b_glm52_terminalmix_lora_sft300_chatml`.
+- Docs: [current experiment status](./CURRENT_EXPERIMENT_STATUS_20260624.ko.md), [TB2 vLLM benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md), [GLM-5.2 chaser experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md), [multi-model GLM-5.2 chaser plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md), [DiffusionGemma dLLM eval plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md)
 
 ---
 
@@ -146,7 +150,8 @@ See [DATA_SOURCES_20260623.ko.md](./DATA_SOURCES_20260623.ko.md) for detailed da
 - `run_multifamily_sft_smoke_20260624.sh` — Gemma/Qwen LoRA smoke SFT queue
 - `run_diffusiongemma_fable_lora_20260624.sh` — DiffusionGemma NeMo AutoModel LoRA smoke queue
 - `run_post_chaser_multimodel_queue_20260624.sh` — waits for the current chaser run, then launches DiffusionGemma eval/smoke before Gemma/Qwen jobs
-- `setup_diffusiongemma_vllm_uv_20260624.sh` — isolated uv env for DiffusionGemma Transformers eval, with vLLM wheel kept for future direct support
+- `setup_diffusiongemma_transformers_uv_20260624.sh` — isolated Docker-free uv env for DiffusionGemma Transformers eval with torch cu128
+- `setup_diffusiongemma_vllm_uv_20260624.sh` — vLLM wheel env kept for future direct support; not used for the current no-Docker dLLM run
 - `replay_eval_vllm.py`, `replay_metrics.py`, `summarize_replay_results.py` — local replay evaluator
 
 ### Training code (`training/`)
@@ -199,6 +204,7 @@ Apache 2.0 (inherited from LiquidAI LFM base).
 - [GLM-5.2 Chaser Experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md)
 - [Multi-model GLM-5.2 Chaser Plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md)
 - [DiffusionGemma dLLM Eval Plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md)
+- [Current Experiment Status](./CURRENT_EXPERIMENT_STATUS_20260624.ko.md)
 - [Progress Timeline](./PROGRESS_20260623.ko.md)
 - [Data Sources](./DATA_SOURCES_20260623.ko.md)
 - [Next Steps](./NEXT_STEPS_20260623.ko.md)
