@@ -103,15 +103,18 @@ Qwen3.5-9B LoRA SFT 재시도가 실행 중이다.
 
 초기 Qwen LoRA run은 모델/VRAM 문제가 아니라 Qwen chat template이 `user` 메시지가 없는 Fable terminal replay 샘플을 거부해서 실패했다. 전체 11,416 rows 중 2,062 rows가 `system -> assistant...` 형태라, 데이터를 버리지 않기 위해 `training/train_multifamily_chat_sft.py`에 `--chat-serialization simple-chatml` 경로를 추가했다. Qwen tokenizer는 `<|im_start|>`/`<|im_end|>`를 단일 special token으로 갖고 있어서 이 우회가 Qwen 계열에 적합하다.
 
-추가로 `--tokenized-cache-dir`을 trainer에 넣었다. 현재 떠 있는 run은 패치 전 커맨드라 rank별 중복 tokenization을 하고 있지만, 다음 run부터는 `scripts/run_multifamily_sft_smoke_20260624.sh`가 `fable_distillation/.cache/tokenized/<RUN_ID>`를 공유해서 GPU idle startup 시간을 줄인다.
+추가로 `--tokenized-cache-dir`을 trainer에 넣었다. 직전 ChatML run은 패치 전 커맨드라 rank별 중복 tokenization을 했지만, 현재 `ddptrue` run부터는 `scripts/run_multifamily_sft_smoke_20260624.sh`가 tokenized cache를 공유해서 GPU idle startup 시간을 줄인다.
+
+두 번째 Qwen ChatML run은 tokenization과 1 step 학습까지 갔지만, Qwen3.5-9B가 VLM 구조라 text-only batch에서는 일부 vision/비사용 모듈이 loss에 참여하지 않아 DDP가 `Expected to have finished reduction... unused parameters`로 중단했다. 이건 OOM이 아니라 DDP 설정 문제다. trainer에 `--ddp-find-unused-parameters true|false`를 추가했고, Qwen preset은 기본 `true`로 재시작한다.
 
 ```bash
 RUN_NOW=1 \
 SKIP_BUILD_DATASET=1 \
 MODEL_PRESET=qwen35_9b \
-RUN_ID=20260624_qwen35_9b_glm52_terminalmix_lora_sft300_chatml \
+RUN_ID=20260624_qwen35_9b_glm52_terminalmix_lora_sft300_chatml_ddptrue \
 TRAIN_JSONL=/home/work/.projects/LLM-OS-Models/Terminal/fable_distillation/datasets/glm52_chaser_terminal_toolmix_20260624.jsonl \
-OUTPUT_DIR=/home/work/.data/harness1/models/Qwen3.5-9B__GLM52-TerminalMix-LoRA-SFT300-ChatML-20260624 \
+OUTPUT_DIR=/home/work/.data/harness1/models/Qwen3.5-9B__GLM52-TerminalMix-LoRA-SFT300-ChatML-DDPTrue-20260624 \
+TOKENIZED_CACHE_DIR=/home/work/.projects/LLM-OS-Models/Terminal/fable_distillation/.cache/tokenized/qwen35_9b_glm52_terminalmix_6000_8192_chatml_seed52_v1 \
 MAX_TRAIN_ROWS=6000 \
 MAX_STEPS=300 \
 LEARNING_RATE=2e-5 \
@@ -121,6 +124,7 @@ LORA_ALPHA=128 \
 MAX_SEQ_LENGTH=8192 \
 SAVE_STEPS=100 \
 CHAT_SERIALIZATION=simple-chatml \
+DDP_FIND_UNUSED_PARAMETERS=true \
 bash scripts/run_multifamily_sft_smoke_20260624.sh
 ```
 

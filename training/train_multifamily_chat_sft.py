@@ -61,6 +61,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--optim", default="adamw_torch")
     parser.add_argument("--attn-implementation", default="sdpa")
     parser.add_argument(
+        "--ddp-find-unused-parameters",
+        choices=("true", "false"),
+        default="false",
+        help="Set TrainingArguments.ddp_find_unused_parameters. Use true for VLMs trained on text-only data.",
+    )
+    parser.add_argument(
         "--chat-template-kwargs-json",
         default="{}",
         help='Extra kwargs for apply_chat_template, e.g. {"enable_thinking": false}.',
@@ -113,6 +119,10 @@ def load_template_kwargs(raw_config: str) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         raise ValueError("--chat-template-kwargs-json must decode to a JSON object")
     return parsed
+
+
+def parse_bool(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def process_rank() -> int:
@@ -371,7 +381,7 @@ def main() -> None:
         "remove_unused_columns": False,
         "dataloader_num_workers": 0,
         "gradient_checkpointing": not use_fsdp_activation_checkpointing,
-        "ddp_find_unused_parameters": False,
+        "ddp_find_unused_parameters": parse_bool(args.ddp_find_unused_parameters),
         "optim": args.optim,
     }
     if args.fsdp:

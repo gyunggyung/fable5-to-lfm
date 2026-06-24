@@ -34,6 +34,7 @@ GRAD_ACCUM="${GRAD_ACCUM:-8}"
 SAVE_STEPS="${SAVE_STEPS:-50}"
 LORA_RANK="${LORA_RANK:-32}"
 LORA_ALPHA="${LORA_ALPHA:-64}"
+DDP_FIND_UNUSED_PARAMETERS="${DDP_FIND_UNUSED_PARAMETERS:-}"
 
 case "$MODEL_PRESET" in
   gemma4_12b_it)
@@ -46,6 +47,7 @@ case "$MODEL_PRESET" in
     MODEL_PATH="${MODEL_PATH:-Qwen/Qwen3.5-9B}"
     MODEL_CLASS="${MODEL_CLASS:-image-text-to-text}"
     CHAT_SERIALIZATION="${CHAT_SERIALIZATION:-simple-chatml}"
+    DDP_FIND_UNUSED_PARAMETERS="${DDP_FIND_UNUSED_PARAMETERS:-true}"
     CHAT_TEMPLATE_KWARGS_JSON="${CHAT_TEMPLATE_KWARGS_JSON:-{}}"
     ;;
   *)
@@ -55,6 +57,8 @@ case "$MODEL_PRESET" in
     CHAT_TEMPLATE_KWARGS_JSON="${CHAT_TEMPLATE_KWARGS_JSON:-{}}"
     ;;
 esac
+
+DDP_FIND_UNUSED_PARAMETERS="${DDP_FIND_UNUSED_PARAMETERS:-false}"
 
 SAFE_MODEL_NAME="${MODEL_PATH//\//__}"
 OUTPUT_DIR="${OUTPUT_DIR:-$OUTPUT_BASE/${SAFE_MODEL_NAME}__Fabliq-Hermes-Smoke-LoRA-20260624}"
@@ -93,6 +97,7 @@ train_cmd=(
   --lora-rank "$LORA_RANK"
   --lora-alpha "$LORA_ALPHA"
   --chat-serialization "$CHAT_SERIALIZATION"
+  --ddp-find-unused-parameters "$DDP_FIND_UNUSED_PARAMETERS"
   --chat-template-kwargs-json "$CHAT_TEMPLATE_KWARGS_JSON"
 )
 
