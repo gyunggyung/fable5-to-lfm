@@ -1,0 +1,124 @@
+# DiffusionGemma 26B-A4B-it strength-task LoRA run.
+#
+# Goal: train where block diffusion should help: structured tool-call/JSON
+# repair, code/tool traces, and Fable terminal behavior.
+
+recipe: DiffusionGemmaSFTRecipe
+
+step_scheduler:
+  global_batch_size: 8
+  local_batch_size: 1
+  log_remote_every_steps: 5
+  ckpt_every_steps: 200
+  val_every_steps: 100000
+  max_steps: 1200
+  num_epochs: 1
+
+dist_env:
+  backend: nccl
+  timeout_minutes: 20
+
+seed: 52
+
+wandb:
+  enable: false
+  project: diffusiongemma-strength-fable
+
+model:
+  _target_: nemo_automodel.NeMoAutoModelForCausalLM.from_pretrained
+  pretrained_model_name_or_path: google/diffusiongemma-26B-A4B-it
+  torch_dtype: float32
+  canvas_length: 256
+  self_conditioning: true
+  freeze_router: true
+  backend:
+    _target_: nemo_automodel.components.models.common.BackendConfig
+    attn: sdpa
+    linear: torch
+    rms_norm: torch_fp32
+    experts: torch_mm
+    dispatcher: torch
+    enable_hf_state_dict_adapter: true
+    enable_fsdp_optimizations: true
+
+peft:
+  _target_: nemo_automodel.components._peft.lora.PeftConfig
+  match_all_linear: false
+  target_modules:
+    - "*self_attn.q_proj"
+    - "*self_attn.k_proj"
+    - "*self_attn.v_proj"
+    - "*self_attn.o_proj"
+    - "*.mlp.gate_proj"
+    - "*.mlp.up_proj"
+    - "*.mlp.down_proj"
+  dim: 16
+  alpha: 32
+
+loss_fn:
+  _target_: nemo_automodel.components.loss.masked_ce.MaskedCrossEntropy
+
+checkpoint:
+  enabled: true
+  checkpoint_dir: /home/work/.data/harness1/models/diffusiongemma-26b-a4b-it__Fable-StructuredRepair-LoRA-20260624/
+  model_save_format: safetensors
+  save_consolidated: false
+
+distributed:
+  strategy: fsdp2
+  dp_size: none
+  tp_size: 1
+  cp_size: 1
+  pp_size: 1
+  ep_size: 8
+  sequence_parallel: false
+  activation_checkpointing: true
+  mp_policy:
+    param_dtype: bfloat16
+    reduce_dtype: float32
+    output_dtype: float32
+  autocast_dtype: bfloat16
+  offload_policy: null
+  moe:
+    reshard_after_forward: false
+
+dllm:
+  mode: block_diffusion
+  block_size: 256
+  vocab_size: 262144
+  eps: 0.001
+  pad_block_size: 256
+  pad_seq_len_divisible: 256
+
+optimizer:
+  _target_: torch.optim.AdamW
+  betas: [0.95, 0.99]
+  eps: 1.0e-8
+  lr: 1.0e-4
+  weight_decay: 1.0e-4
+
+clip_grad_norm:
+  max_norm: 1.0
+
+lr_scheduler:
+  lr_warmup_steps: 50
+  init_lr: 0.0
+  lr_decay_style: cosine
+  min_lr: 1.0e-5
+
+dataset:
+  _target_: nemo_automodel.components.datasets.llm.chat_dataset.ChatDataset
+  path_or_dataset_id: /home/work/.projects/LLM-OS-Models/Terminal/fable_distillation/datasets/diffusiongemma_strength_mix_20260624.jsonl
+  split: train
+  shuffle_seed: 52
+  seq_length: 4096
+  truncation: true
+  unshifted: true
+  mask_history: true
+  tokenizer:
+    pretrained_model_name_or_path: google/diffusiongemma-26B-A4B-it
+
+dataloader:
+  _target_: torchdata.stateful_dataloader.StatefulDataLoader
+  collate_fn: nemo_automodel.components.datasets.utils.default_collater
+  shuffle: true

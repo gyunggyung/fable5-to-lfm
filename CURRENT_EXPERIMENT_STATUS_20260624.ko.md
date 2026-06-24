@@ -143,10 +143,19 @@ bash scripts/run_multifamily_sft_smoke_20260624.sh
 - 동작: `final_lora`와 `run_config.json`이 생기면 LoRA를 full HF checkpoint로 merge하고, 이어서 merged Qwen3.5-9B를 8-shard vLLM TB2-lite 평가로 실행한다.
 - 대기 로그: `logs/20260624_qwen35_9b_glm52_terminalmix_lora_sft300_chatml_ddptrue_post_eval/watcher.nohup.log`
 
+DiffusionGemma는 TB2-lite base 성능이 낮았으므로 다음 run을 “dLLM 강점 태스크”로 바꿨다.
+
+- 방법론 문서: `DIFFUSIONGEMMA_STRENGTH_TASKS_20260624.ko.md`
+- 데이터 빌더: `scripts/build_diffusiongemma_strength_mix_20260624.py`
+- 학습 config: `configs/diffusiongemma_26b_a4b_strength_lora_20260624.yaml`
+- 실행 runner: `scripts/run_diffusiongemma_strength_lora_20260624.sh`
+- 생성 데이터: `datasets/diffusiongemma_strength_mix_20260624.jsonl` (11,352 rows, gitignored)
+- 핵심: Fable terminal/tool-call 데이터를 유지하면서 JSON/tool-call repair를 추가해 DiffusionGemma의 bidirectional denoising/self-correction 장점을 학습시킨다.
+
 ## 다음 판단
 
 1. Qwen3.5-9B ChatML LoRA가 정상 학습되는지 확인한다.
 2. 완료되면 adapter를 merge해서 vLLM 평가를 돌린다.
-3. Qwen LoRA가 51.59에 접근하지 못하면 terminal/tool-call 데이터 비율, LR, epoch를 조정하거나 RL/GRPO 계열로 이어간다.
-4. DiffusionGemma base는 낮으므로 dLLM은 LoRA/SFT나 prompt format tuning을 한 뒤 다시 본다.
-5. DiffusionGemma dLLM은 실행 성공/성능 실패 상태이므로, 다음 dLLM 실험은 NeMo AutoModel LoRA/SFT 또는 prompt format tuning으로 좁힌다.
+3. GPU가 풀리면 DiffusionGemma strength-task LoRA를 실행한다.
+4. Qwen LoRA가 51.59에 접근하지 못하면 terminal/tool-call 데이터 비율, LR, epoch를 조정하거나 RL/GRPO 계열로 이어간다.
+5. DiffusionGemma LoRA 후 structured repair, TB2-lite, code/tool long probe를 모두 본다.
