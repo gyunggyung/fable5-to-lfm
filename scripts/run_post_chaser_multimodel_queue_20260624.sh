@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Wait for the current GLM-5.2 chaser launcher to exit, then run multi-model
-# smoke jobs sequentially so GPUs do not sit idle after the long SFT/eval.
+# jobs sequentially so GPUs do not sit idle after the long SFT/eval.
 #
 # Dry-run by default:
 #   bash fable_distillation/scripts/run_post_chaser_multimodel_queue_20260624.sh
@@ -58,11 +58,19 @@ log "wait_pid_file=$WAIT_PID_FILE"
 
 if [[ "$RUN_NOW" != "1" ]]; then
   log "DRY-RUN. Set RUN_NOW=1 to execute after wait."
-  log "planned steps: gemma4_12b_it smoke -> qwen35_9b smoke -> diffusiongemma smoke"
+  log "planned steps: diffusiongemma base eval -> diffusiongemma smoke -> gemma4_12b_it smoke -> qwen35_9b smoke"
   exit 0
 fi
 
 wait_for_chaser
+
+run_step diffusiongemma_26b_a4b_base_eval \
+  env RUN_NOW=1 \
+  bash "$FABLE_DIR/scripts/run_diffusiongemma_dllm_eval_20260624.sh"
+
+run_step diffusiongemma_26b_a4b_smoke \
+  env RUN_NOW=1 \
+  bash "$FABLE_DIR/scripts/run_diffusiongemma_fable_lora_20260624.sh"
 
 run_step gemma4_12b_it_smoke \
   env MODEL_PRESET=gemma4_12b_it RUN_NOW=1 \
@@ -71,9 +79,5 @@ run_step gemma4_12b_it_smoke \
 run_step qwen35_9b_smoke \
   env MODEL_PRESET=qwen35_9b RUN_NOW=1 \
   bash "$FABLE_DIR/scripts/run_multifamily_sft_smoke_20260624.sh"
-
-run_step diffusiongemma_26b_a4b_smoke \
-  env RUN_NOW=1 \
-  bash "$FABLE_DIR/scripts/run_diffusiongemma_fable_lora_20260624.sh"
 
 log "done"

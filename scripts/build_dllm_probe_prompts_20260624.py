@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+"""Build a small prompt suite for checking whether dLLM behavior is useful.
+
+This is not a scored benchmark. It is a speed/behavior probe that stresses
+cases where block diffusion should matter: longer responses, code generation,
+structured tool calls, and terminal planning.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+PROMPTS = [
+    {
+        "id": "long_code_cli_todo",
+        "category": "long_code",
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "Write a complete Python command-line todo application using sqlite3. "
+                    "Include add/list/done/delete/search commands, argparse, schema migration, "
+                    "and clear error handling. Return code only."
+                ),
+            }
+        ],
+    },
+    {
+        "id": "terminal_debug_plan",
+        "category": "terminal_agent",
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "You are in a Linux repo. pytest is failing with an import error after a package "
+                    "rename. Produce a concise terminal command plan as JSON with keys analysis, plan, "
+                    "commands, task_complete. Each command item must have keystrokes."
+                ),
+            }
+        ],
+    },
+    {
+        "id": "tool_call_json",
+        "category": "tool_call",
+        "messages": [
+            {
+                "role": "system",
+                "content": "You must answer with exactly one JSON object and no markdown.",
+            },
+            {
+                "role": "user",
+                "content": (
+                    "A terminal shows: `git status` has modified README.md and tests/test_cli.py. "
+                    "We need inspect the diff and run the focused test. Return analysis, plan, "
+                    "commands, task_complete."
+                ),
+            },
+        ],
+    },
+    {
+        "id": "long_explanation_diffusion",
+        "category": "long_reasoning",
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "Explain block diffusion language model inference to a senior engineer. "
+                    "Compare TTFT, generation throughput, batching limits, and failure modes "
+                    "against autoregressive decoding. Use concrete engineering language."
+                ),
+            }
+        ],
+    },
+    {
+        "id": "code_review_findings",
+        "category": "code_review",
+        "messages": [
+            {
+                "role": "user",
+                "content": (
+                    "Review this pseudo diff and list only real bugs with severity. "
+                    "Diff: a CLI now catches all Exceptions around config parsing, logs a warning, "
+                    "and continues with defaults; tests only check happy path. The config contains "
+                    "database path, auth token path, and delete confirmation policy."
+                ),
+            }
+        ],
+    },
+    {
+        "id": "large_json_schema",
+        "category": "structured",
+        "messages": [
+            {
+                "role": "system",
+                "content": "Return valid JSON only.",
+            },
+            {
+                "role": "user",
+                "content": (
+                    "Create a JSON test plan for a terminal benchmark harness with fields: goals, "
+                    "datasets, metrics, model_matrix, run_order, stop_conditions, risks, and next_actions. "
+                    "Use arrays of concrete strings."
+                ),
+            },
+        ],
+    },
+]
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--output", default="fable_distillation/benchmarks/20260624_dllm_probe/prompts.jsonl")
+    args = parser.parse_args()
+
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w", encoding="utf-8") as handle:
+        for row in PROMPTS:
+            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+    print(json.dumps({"output": str(output), "rows": len(PROMPTS)}, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()

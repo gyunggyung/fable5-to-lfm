@@ -120,9 +120,10 @@ config:
 역할:
 
 - 현재 `glm52_chaser_mix` launcher PID가 끝날 때까지 대기
-- chaser script의 자동 vLLM 평가까지 끝난 뒤 Gemma 4 12B IT smoke 실행
-- 이어서 Qwen3.5 9B smoke 실행
-- 마지막으로 DiffusionGemma 26B-A4B smoke 실행
+- chaser script의 자동 vLLM 평가까지 끝난 뒤 DiffusionGemma base vLLM 평가 실행
+- 이어서 DiffusionGemma 26B-A4B LoRA smoke 실행
+- 그 다음 Gemma 4 12B IT smoke 실행
+- 마지막으로 Qwen3.5 9B smoke 실행
 
 실행:
 

@@ -201,6 +201,11 @@ def build_llm(args: argparse.Namespace) -> tuple[LLM, dict]:
         kwargs["hf_overrides"] = json.loads(args.hf_overrides_json)
     if args.speculative_config_json and engine_accepts_kwarg("speculative_config"):
         kwargs["speculative_config"] = json.loads(args.speculative_config_json)
+    if args.engine_kwargs_json:
+        extra_kwargs = json.loads(args.engine_kwargs_json)
+        if not isinstance(extra_kwargs, dict):
+            raise ValueError("--engine-kwargs-json must decode to a JSON object")
+        kwargs.update(extra_kwargs)
     if args.enable_expert_parallel and engine_accepts_kwarg("enable_expert_parallel"):
         kwargs["enable_expert_parallel"] = True
     if args.disable_custom_all_reduce and engine_accepts_kwarg("disable_custom_all_reduce"):
@@ -272,6 +277,8 @@ def main() -> None:
     parser.add_argument("--hf-config-path", default="")
     parser.add_argument("--hf-overrides-json", default="")
     parser.add_argument("--speculative-config-json", default="")
+    parser.add_argument("--engine-kwargs-json", default="")
+    parser.add_argument("--sampling-params-json", default="")
     parser.add_argument("--language-model-only", action="store_true")
     parser.add_argument("--enable-expert-parallel", action="store_true")
     parser.add_argument("--enable-prefix-caching", action="store_true")
@@ -336,6 +343,11 @@ def main() -> None:
         sampling_kwargs["include_stop_str_in_output"] = args.include_stop_str_in_output
     if args.min_p > 0:
         sampling_kwargs["min_p"] = args.min_p
+    if args.sampling_params_json:
+        extra_sampling = json.loads(args.sampling_params_json)
+        if not isinstance(extra_sampling, dict):
+            raise ValueError("--sampling-params-json must decode to a JSON object")
+        sampling_kwargs.update(extra_sampling)
     sampling = SamplingParams(**sampling_kwargs)
 
     lora_request = None
@@ -436,6 +448,8 @@ def main() -> None:
             "hf_config_path": args.hf_config_path,
             "hf_overrides_json": args.hf_overrides_json,
             "speculative_config_json": args.speculative_config_json,
+            "engine_kwargs_json": args.engine_kwargs_json,
+            "sampling_params_json": args.sampling_params_json,
             "enable_expert_parallel": args.enable_expert_parallel,
             "enable_prefix_caching": args.enable_prefix_caching,
             "disable_chunked_prefill": args.disable_chunked_prefill,
