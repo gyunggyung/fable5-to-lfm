@@ -153,6 +153,7 @@ TB2-lite vLLM 근거:
 - `build_diffusiongemma_strength_mix_20260624.py` — DiffusionGemma용 Fable + structured repair SFT mix 생성
 - `diffusiongemma_finetune_skip_peft_optim_ckpt_20260624.py` — PEFT optimizer checkpoint 직렬화는 건너뛰고 LoRA adapter 저장은 유지하는 로컬 NeMo launcher wrapper
 - `run_diffusiongemma_strength_lora_20260624.sh` — DiffusionGemma 강점 태스크용 NeMo AutoModel LoRA runner
+- `stop_fable_gpu_jobs_20260624.sh` — dry-run 우선 방식의 fable_distillation GPU/eval job 정리 스크립트
 - `run_multifamily_sft_smoke_20260624.sh` — Gemma/Qwen LoRA smoke SFT queue
 - `merge_multifamily_lora_for_vllm.py` — Gemma/Qwen 계열 HF checkpoint를 vLLM 평가 전에 병합하는 generic PEFT LoRA merge helper
 - `watch_qwen35_lora_merge_eval_20260624.sh` — 현재 Qwen3.5 LoRA SFT run을 기다렸다가 `final_lora` 병합 후 8-shard TB2-lite vLLM 평가를 실행하는 watcher

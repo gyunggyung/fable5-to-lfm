@@ -13,7 +13,7 @@ cd "$ROOT_DIR"
 
 RUN_NOW="${RUN_NOW:-0}"
 SKIP_BUILD_DATASET="${SKIP_BUILD_DATASET:-0}"
-RUN_ID="${RUN_ID:-20260624_diffusiongemma_strength_lora_fable_structured_repair}"
+RUN_ID="${RUN_ID:-20260624_diffusiongemma_strength_lora_fable_structured_repair_nooptim}"
 TRAIN_ENV="${TRAIN_ENV:-/home/work/.data/harness1/envs/diffusiongemma-nemo}"
 DG_WORK_DIR="${DG_WORK_DIR:-/home/work/.data/harness1/diffusiongemma_retriever}"
 AUTOMODEL_DIR="${AUTOMODEL_DIR:-$DG_WORK_DIR/Automodel}"

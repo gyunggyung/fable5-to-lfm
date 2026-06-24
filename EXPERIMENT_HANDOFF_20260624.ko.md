@@ -8,6 +8,18 @@ GPU 사용 프로세스는 모두 중단했다. `nvidia-smi --query-compute-apps
 
 남아 있는 `Liquid-CLI/scripts/sync_echo_adapter_checkpoints_to_hf_model.py` 프로세스는 Hugging Face 동기화 loop이며 GPU compute app이 아니다.
 
+정리용 stop 스크립트를 추가했다.
+
+```bash
+# 먼저 dry-run으로 매칭되는 fable_distillation job 확인
+bash fable_distillation/scripts/stop_fable_gpu_jobs_20260624.sh
+
+# 실제 중단
+RUN_NOW=1 bash fable_distillation/scripts/stop_fable_gpu_jobs_20260624.sh
+```
+
+주의: 이 스크립트는 `fable_distillation` 경로가 command line에 들어간 GPU/eval job만 대상으로 한다. Liquid 동기화 loop처럼 GPU를 쓰지 않는 외부 프로세스는 건드리지 않는다.
+
 ## 커밋 상태
 
 최근 관련 커밋:
@@ -48,6 +60,8 @@ GPU 사용 프로세스는 모두 중단했다. `nvidia-smi --query-compute-apps
   - wrapper: `scripts/diffusiongemma_finetune_skip_peft_optim_ckpt_20260624.py`
   - runner: `scripts/run_diffusiongemma_strength_lora_20260624.sh`
   - config: `configs/diffusiongemma_26b_a4b_strength_lora_20260624.yaml`
+- GPU job 정리 스크립트 추가.
+  - stop script: `scripts/stop_fable_gpu_jobs_20260624.sh`
 
 ## DiffusionGemma 최신 학습 상태
 
@@ -91,6 +105,7 @@ GPU 사용 프로세스는 모두 중단했다. `nvidia-smi --query-compute-apps
 
 - DiffusionGemma LoRA는 아직 full 1200 step 완료 전이다.
 - no-optimizer checkpoint는 optimizer state가 없으므로 그대로 이어 학습하려면 별도 adapter-load 시작 경로가 필요하다.
+- `SIGTERM`으로 graceful stop 시 rank0가 adapter checkpoint를 저장한 뒤 torch elastic launcher가 `SignalException` traceback을 남긴다. 실제 adapter 저장은 성공했지만 로그가 실패처럼 보인다.
 - DiffusionGemma VRAM 사용량은 H200 기준 낮다.
   - 학습 중 로그 기준 대략 `21-50GiB/GPU` 범위.
   - 이번 run은 사용자가 “지금은 그대로”라고 해서 batch/seq 조정 없이 유지했다.
@@ -100,17 +115,18 @@ GPU 사용 프로세스는 모두 중단했다. `nvidia-smi --query-compute-apps
 
 ## 바로 해야 할 것
 
-1. GPU를 다시 쓸 때 DiffusionGemma를 계속할지 먼저 결정한다.
+1. GPU를 다시 쓰기 전 `bash fable_distillation/scripts/stop_fable_gpu_jobs_20260624.sh` dry-run으로 남은 fable job이 없는지 확인한다.
+2. DiffusionGemma를 계속할지 먼저 결정한다.
    - 선택 A: step 112 adapter를 평가만 해본다.
    - 선택 B: base부터 1200 step 재시작한다.
    - 선택 C: step 112 adapter를 초기 adapter로 로드하는 재시작 코드를 만든 뒤 이어간다.
-2. DiffusionGemma 다음 run은 VRAM 활용을 올린 config를 별도로 만든다.
+3. DiffusionGemma 다음 run은 VRAM 활용을 올린 config를 별도로 만든다.
    - 후보: `global_batch_size` 증가, micro-batch/grad accumulation 조정, `seq_length` 확대, packing 개선.
    - 먼저 짧은 20-50 step smoke로 OOM과 tps를 비교한다.
-3. step 200 checkpoint 통과를 다시 확인한다.
+4. step 200 checkpoint 통과를 다시 확인한다.
    - no-optimizer wrapper는 step 112 signal checkpoint에서 동작 확인됐지만, 정규 `ckpt_every_steps: 200` 지점은 아직 통과 전이다.
-4. Qwen3.5 merged checkpoint를 text-only export로 다시 만들고 vLLM load를 재검증한다.
-5. 성공/실패 판단은 공식 공개 benchmark 축으로 연결한다.
+5. Qwen3.5 merged checkpoint를 text-only export로 다시 만들고 vLLM load를 재검증한다.
+6. 성공/실패 판단은 공식 공개 benchmark 축으로 연결한다.
    - DiffusionGemma 공식 타깃: `Tau2`, `LiveCodeBench v6`
    - GLM-5.2 추격 타깃: `Tool-Decathlon`, `MCP-Atlas`, `Terminal-Bench 2.1`
 

@@ -1,9 +1,20 @@
 # Datasets (large, downloadable from HF)
 datasets/
+datasets_ko/
 logs/
 .cache/
 *.parquet
 *.jsonl.gz
+*.pid
+
+# Local benchmark/eval artifacts. Keep curated summaries tracked explicitly.
+benchmarks/20260624_diffusiongemma_dllm_base_transformers_cu128_decodefix_full/
+benchmarks/20260624_diffusiongemma_dllm_base_transformers_cu128_sync_full/
+benchmarks/20260624_diffusiongemma_dllm_decode_smoke2/
+benchmarks/20260624_diffusiongemma_dllm_decode_smoke3/
+benchmarks/20260624_glm52_chaser_ckpt1400_tb2_vllm_sharded/
+benchmarks/20260624_glm52_chaser_mix_tb2_vllm_sharded/
+benchmarks/20260624_qwen35_9b_tb2_vllm_sharded_32k/
 
 # Python
 __pycache__/

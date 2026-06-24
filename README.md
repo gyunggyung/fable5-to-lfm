@@ -152,6 +152,7 @@ See [DATA_SOURCES_20260623.ko.md](./DATA_SOURCES_20260623.ko.md) for detailed da
 - `build_diffusiongemma_strength_mix_20260624.py` — builds the Fable + structured repair SFT mix for DiffusionGemma
 - `diffusiongemma_finetune_skip_peft_optim_ckpt_20260624.py` — local NeMo launcher wrapper that skips PEFT optimizer checkpoint serialization while keeping LoRA adapter saves
 - `run_diffusiongemma_strength_lora_20260624.sh` — NeMo AutoModel LoRA run for DiffusionGemma strength tasks
+- `stop_fable_gpu_jobs_20260624.sh` — dry-run-first stopper for fable_distillation GPU/eval jobs
 - `run_multifamily_sft_smoke_20260624.sh` — Gemma/Qwen LoRA smoke SFT queue
 - `merge_multifamily_lora_for_vllm.py` — generic PEFT LoRA merge helper for Gemma/Qwen-style HF checkpoints before vLLM eval
 - `watch_qwen35_lora_merge_eval_20260624.sh` — waits for the active Qwen3.5 LoRA SFT run, merges `final_lora`, then starts 8-shard TB2-lite vLLM eval
