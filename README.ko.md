@@ -35,8 +35,8 @@
 - Qwen3.5-9B base vLLM fallback은 TB2-lite 32k sharded 평가에서 `36.75`로 완료.
 - DiffusionGemma 우선순위: dLLM base 평가는 Docker 없이 로컬 `diffusiongemma-transformers-cu128` uv 가상환경의 Transformers `DiffusionGemmaForBlockDiffusion` backend로 성공. 첫 0점 run 이후 decode/prompt stripping 버그를 고쳤고, 수정 full run은 score `25.12`, probe `97.88 tok/s`. 결론은 실행 성공/성능 실패다.
 - GLM-5.2 chaser `checkpoint-1400` vLLM sharded TB2-lite 평가는 완료. score `50.56`으로 final `51.13`보다 낮아 현 1위 `51.59`는 못 넘었다.
-- Qwen3.5-9B LoRA SFT300은 Qwen native chat template 실패 후 `simple-chatml` 직렬화로 고쳤고, VLM text-only DDP unused-parameter 실패 후 `DDP_FIND_UNUSED_PARAMETERS=true` 및 shared tokenized cache로 재시작했다. 현재 run id는 `20260624_qwen35_9b_glm52_terminalmix_lora_sft300_chatml_ddptrue`; 이전 DDP 실패 지점은 넘었고, 학습 종료 후 LoRA 병합과 sharded vLLM TB2-lite 평가를 자동으로 이어갈 watcher도 대기 중이다.
-- 다음 DiffusionGemma run은 raw next-action이 아니라 강점 태스크로 바꾼다. Fable terminal/tool-call trace를 유지하고 structured JSON/tool-call repair를 추가하며, `scripts/build_diffusiongemma_strength_mix_20260624.py`와 `configs/diffusiongemma_26b_a4b_strength_lora_20260624.yaml`을 사용한다.
+- Qwen3.5-9B LoRA SFT300은 train loss `0.6287`로 완료했고 adapter 병합도 끝났다. 다만 merged checkpoint가 현재 vLLM 로드에서 VLM/text wrapper weight-key mismatch로 실패해 TB2-lite 점수는 아직 없다. 이 export 문제는 DiffusionGemma 1차 학습 뒤 처리한다.
+- 다음 DiffusionGemma run은 raw next-action이 아니라 강점 태스크로 바꾼다. Fable terminal/tool-call trace를 유지하고 structured JSON/tool-call repair를 추가하며, `scripts/build_diffusiongemma_strength_mix_20260624.py`와 `configs/diffusiongemma_26b_a4b_strength_lora_20260624.yaml`을 사용한다. 첫 retry는 step 199까지 정상 학습 후 NeMo PEFT optimizer safetensors checkpoint 버그로 실패했고, 이제 `scripts/diffusiongemma_finetune_skip_peft_optim_ckpt_20260624.py`로 adapter checkpoint는 유지하고 optimizer checkpoint만 건너뛴다.
 - 문서: [현재 실험 상태](./CURRENT_EXPERIMENT_STATUS_20260624.ko.md), [TB2 vLLM benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md), [GLM-5.2 chaser experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md), [multi-model GLM-5.2 chaser plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md), [DiffusionGemma dLLM eval plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md), [DiffusionGemma strength tasks](./DIFFUSIONGEMMA_STRENGTH_TASKS_20260624.ko.md)
 
 ---
@@ -150,6 +150,7 @@ TB2-lite vLLM 근거:
 - `vllm_prompt_probe.py` — vLLM 긴 출력 속도/형태 probe
 - `run_diffusiongemma_dllm_eval_20260624.sh` — DiffusionGemma base TB2-lite + long-output Transformers dLLM 평가
 - `build_diffusiongemma_strength_mix_20260624.py` — DiffusionGemma용 Fable + structured repair SFT mix 생성
+- `diffusiongemma_finetune_skip_peft_optim_ckpt_20260624.py` — PEFT optimizer checkpoint 직렬화는 건너뛰고 LoRA adapter 저장은 유지하는 로컬 NeMo launcher wrapper
 - `run_diffusiongemma_strength_lora_20260624.sh` — DiffusionGemma 강점 태스크용 NeMo AutoModel LoRA runner
 - `run_multifamily_sft_smoke_20260624.sh` — Gemma/Qwen LoRA smoke SFT queue
 - `merge_multifamily_lora_for_vllm.py` — Gemma/Qwen 계열 HF checkpoint를 vLLM 평가 전에 병합하는 generic PEFT LoRA merge helper

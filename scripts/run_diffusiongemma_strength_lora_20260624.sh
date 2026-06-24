@@ -18,6 +18,7 @@ TRAIN_ENV="${TRAIN_ENV:-/home/work/.data/harness1/envs/diffusiongemma-nemo}"
 DG_WORK_DIR="${DG_WORK_DIR:-/home/work/.data/harness1/diffusiongemma_retriever}"
 AUTOMODEL_DIR="${AUTOMODEL_DIR:-$DG_WORK_DIR/Automodel}"
 CONFIG_PATH="${CONFIG_PATH:-$FABLE_DIR/configs/diffusiongemma_26b_a4b_strength_lora_20260624.yaml}"
+TRAIN_SCRIPT="${TRAIN_SCRIPT:-$FABLE_DIR/scripts/diffusiongemma_finetune_skip_peft_optim_ckpt_20260624.py}"
 TRAIN_JSONL="${TRAIN_JSONL:-$FABLE_DIR/datasets/diffusiongemma_strength_mix_20260624.jsonl}"
 TRAIN_META="${TRAIN_META:-$FABLE_DIR/datasets/diffusiongemma_strength_mix_20260624.meta.json}"
 LOG_DIR="${LOG_DIR:-$FABLE_DIR/logs/$RUN_ID}"
@@ -43,7 +44,7 @@ train_cmd=(
   TORCH_NCCL_ASYNC_ERROR_HANDLING="${TORCH_NCCL_ASYNC_ERROR_HANDLING:-1}"
   "$TRAIN_ENV/bin/python" -m torch.distributed.run
   --standalone --nproc-per-node="$NPROC_PER_NODE"
-  "$AUTOMODEL_DIR/examples/dllm_sft/finetune.py"
+  "$TRAIN_SCRIPT"
   -c "$CONFIG_PATH"
 )
 
@@ -55,7 +56,7 @@ print_cmd() {
   printf '\n'
 }
 
-printf 'run_id=%s\nconfig=%s\ntrain_jsonl=%s\nlog_dir=%s\n' "$RUN_ID" "$CONFIG_PATH" "$TRAIN_JSONL" "$LOG_DIR"
+printf 'run_id=%s\nconfig=%s\ntrain_script=%s\ntrain_jsonl=%s\nlog_dir=%s\n' "$RUN_ID" "$CONFIG_PATH" "$TRAIN_SCRIPT" "$TRAIN_JSONL" "$LOG_DIR"
 print_cmd "dataset command" "${build_dataset_cmd[@]}"
 print_cmd "train command" "${train_cmd[@]}"
 

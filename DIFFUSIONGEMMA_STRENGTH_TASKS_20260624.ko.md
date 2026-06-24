@@ -79,7 +79,9 @@ NVIDIA NeMo AutoModel 문서는 DiffusionGemma SFT/LoRA recipe가 final response
 RUN_NOW=1 bash fable_distillation/scripts/run_diffusiongemma_strength_lora_20260624.sh
 ```
 
-현재 Qwen LoRA가 GPU를 쓰고 있으므로 이 runner는 GPU가 풀린 뒤 실행한다.
+현재는 Docker 없이 NeMo AutoModel 가상환경에서 실행한다. 첫 retry는 step 199까지 정상 학습했지만 step 200 checkpoint에서 PEFT optimizer state가 `safetensors`에 맞지 않아 실패했다. 그래서 `scripts/diffusiongemma_finetune_skip_peft_optim_ckpt_20260624.py` wrapper를 추가해 PEFT adapter는 계속 저장하고 optimizer checkpoint만 건너뛰게 했다.
+
+재시작 run은 `20260624_diffusiongemma_strength_lora_fable_structured_repair_nooptim_retry2`로 진행한다. 목표는 먼저 step 200 checkpoint를 통과하고, 이후 1200 step 완료 adapter로 structured repair/TB2-lite/code-tool probe를 평가하는 것이다.
 
 ## 다음 평가
 

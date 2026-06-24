@@ -60,7 +60,7 @@ loss_fn:
 
 checkpoint:
   enabled: true
-  checkpoint_dir: /home/work/.data/harness1/models/diffusiongemma-26b-a4b-it__Fable-StructuredRepair-LoRA-20260624/
+  checkpoint_dir: /home/work/.data/harness1/models/diffusiongemma-26b-a4b-it__Fable-StructuredRepair-LoRA-NoOptim-20260624/
   model_save_format: safetensors
   save_consolidated: false
 
