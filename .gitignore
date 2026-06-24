@@ -1,6 +1,7 @@
 # Datasets (large, downloadable from HF)
 datasets/
 logs/
+.cache/
 *.parquet
 *.jsonl.gz
 
