@@ -35,7 +35,7 @@ Current 2026-06-24 experiment status:
 - Qwen3.5-9B base vLLM fallback completed with score `36.75` on TB2-lite 32k sharded eval.
 - DiffusionGemma dLLM base eval succeeded without Docker through the local `diffusiongemma-transformers-cu128` uv env plus Transformers `DiffusionGemmaForBlockDiffusion`. A decode/prompt-stripping bug was fixed after a 0-score first run; the corrected full run scored `25.12` with `97.88 tok/s` on the probe. The status is execution success but benchmark failure.
 - GLM-5.2 chaser `checkpoint-1400` vLLM sharded TB2-lite eval completed at `50.56`, below both final `51.13` and the current best `51.59`.
-- Qwen3.5-9B LoRA SFT300 was fixed with `simple-chatml` after the native Qwen chat template rejected assistant-only Fable replay samples, then restarted with `DDP_FIND_UNUSED_PARAMETERS=true` and a shared tokenized cache after the VLM text-only DDP unused-parameter failure. Current run id: `20260624_qwen35_9b_glm52_terminalmix_lora_sft300_chatml_ddptrue`.
+- Qwen3.5-9B LoRA SFT300 was fixed with `simple-chatml` after the native Qwen chat template rejected assistant-only Fable replay samples, then restarted with `DDP_FIND_UNUSED_PARAMETERS=true` and a shared tokenized cache after the VLM text-only DDP unused-parameter failure. Current run id: `20260624_qwen35_9b_glm52_terminalmix_lora_sft300_chatml_ddptrue`; it has passed the earlier DDP failure point and a post-training watcher is waiting to merge the LoRA and launch the sharded vLLM TB2-lite eval.
 - Docs: [current experiment status](./CURRENT_EXPERIMENT_STATUS_20260624.ko.md), [TB2 vLLM benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md), [GLM-5.2 chaser experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md), [multi-model GLM-5.2 chaser plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md), [DiffusionGemma dLLM eval plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md)
 
 ---
@@ -148,6 +148,8 @@ See [DATA_SOURCES_20260623.ko.md](./DATA_SOURCES_20260623.ko.md) for detailed da
 - `vllm_prompt_probe.py` — vLLM long-output speed/shape probe
 - `run_diffusiongemma_dllm_eval_20260624.sh` — DiffusionGemma base TB2-lite + long-output Transformers dLLM eval
 - `run_multifamily_sft_smoke_20260624.sh` — Gemma/Qwen LoRA smoke SFT queue
+- `merge_multifamily_lora_for_vllm.py` — generic PEFT LoRA merge helper for Gemma/Qwen-style HF checkpoints before vLLM eval
+- `watch_qwen35_lora_merge_eval_20260624.sh` — waits for the active Qwen3.5 LoRA SFT run, merges `final_lora`, then starts 8-shard TB2-lite vLLM eval
 - `run_diffusiongemma_fable_lora_20260624.sh` — DiffusionGemma NeMo AutoModel LoRA smoke queue
 - `run_post_chaser_multimodel_queue_20260624.sh` — waits for the current chaser run, then launches DiffusionGemma eval/smoke before Gemma/Qwen jobs
 - `setup_diffusiongemma_transformers_uv_20260624.sh` — isolated Docker-free uv env for DiffusionGemma Transformers eval with torch cu128

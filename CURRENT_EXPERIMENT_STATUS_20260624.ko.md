@@ -105,7 +105,9 @@ Qwen3.5-9B LoRA SFT 재시도가 실행 중이다.
 
 추가로 `--tokenized-cache-dir`을 trainer에 넣었다. 직전 ChatML run은 패치 전 커맨드라 rank별 중복 tokenization을 했지만, 현재 `ddptrue` run부터는 `scripts/run_multifamily_sft_smoke_20260624.sh`가 tokenized cache를 공유해서 GPU idle startup 시간을 줄인다.
 
-두 번째 Qwen ChatML run은 tokenization과 1 step 학습까지 갔지만, Qwen3.5-9B가 VLM 구조라 text-only batch에서는 일부 vision/비사용 모듈이 loss에 참여하지 않아 DDP가 `Expected to have finished reduction... unused parameters`로 중단했다. 이건 OOM이 아니라 DDP 설정 문제다. trainer에 `--ddp-find-unused-parameters true|false`를 추가했고, Qwen preset은 기본 `true`로 재시작한다.
+두 번째 Qwen ChatML run은 tokenization과 1 step 학습까지 갔지만, Qwen3.5-9B가 VLM 구조라 text-only batch에서는 일부 vision/비사용 모듈이 loss에 참여하지 않아 DDP가 `Expected to have finished reduction... unused parameters`로 중단했다. 이건 OOM이 아니라 DDP 설정 문제다. trainer에 `--ddp-find-unused-parameters true|false`를 추가했고, Qwen preset은 기본 `true`로 재시작했다.
+
+현재 `ddptrue` run은 shared tokenized cache를 정상 생성했고, DDP unused-parameter 실패 지점을 넘어 8 step 이상 학습을 진행했다. GPU 8장은 대략 54-57GB VRAM씩 사용 중이라 현재는 GPU가 놀고 있지 않다.
 
 ```bash
 RUN_NOW=1 \
@@ -134,10 +136,17 @@ bash scripts/run_multifamily_sft_smoke_20260624.sh
 - `scripts/run_qwen35_9b_tb2_vllm_sharded_20260624.sh`로 TB2-lite vLLM sharded 평가
 - base Qwen3.5-9B 점수 `36.75`를 얼마나 끌어올리는지 확인
 
+자동 후처리도 걸어두었다.
+
+- 병합 스크립트: `scripts/merge_multifamily_lora_for_vllm.py`
+- watcher: `scripts/watch_qwen35_lora_merge_eval_20260624.sh`
+- 동작: `final_lora`와 `run_config.json`이 생기면 LoRA를 full HF checkpoint로 merge하고, 이어서 merged Qwen3.5-9B를 8-shard vLLM TB2-lite 평가로 실행한다.
+- 대기 로그: `logs/20260624_qwen35_9b_glm52_terminalmix_lora_sft300_chatml_ddptrue_post_eval/watcher.nohup.log`
+
 ## 다음 판단
 
 1. Qwen3.5-9B ChatML LoRA가 정상 학습되는지 확인한다.
 2. 완료되면 adapter를 merge해서 vLLM 평가를 돌린다.
 3. Qwen LoRA가 51.59에 접근하지 못하면 terminal/tool-call 데이터 비율, LR, epoch를 조정하거나 RL/GRPO 계열로 이어간다.
-3. DiffusionGemma base는 낮으므로 dLLM은 LoRA/SFT나 prompt format tuning을 한 뒤 다시 본다.
-4. DiffusionGemma dLLM은 실행 성공/성능 실패 상태이므로, 다음 dLLM 실험은 NeMo AutoModel LoRA/SFT 또는 prompt format tuning으로 좁힌다.
+4. DiffusionGemma base는 낮으므로 dLLM은 LoRA/SFT나 prompt format tuning을 한 뒤 다시 본다.
+5. DiffusionGemma dLLM은 실행 성공/성능 실패 상태이므로, 다음 dLLM 실험은 NeMo AutoModel LoRA/SFT 또는 prompt format tuning으로 좁힌다.
