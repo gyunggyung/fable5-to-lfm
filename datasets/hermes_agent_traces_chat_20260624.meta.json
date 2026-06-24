@@ -1,0 +1,46 @@
+{
+  "output": "fable_distillation/datasets/hermes_agent_traces_chat_20260624.jsonl",
+  "repo_id": "lambda/hermes-agent-reasoning-traces",
+  "configs": [
+    "kimi",
+    "glm-5.1"
+  ],
+  "tool_role_mode": "user",
+  "inject_tools": true,
+  "max_rows_per_config": 0,
+  "max_output_rows": 0,
+  "seed": 52,
+  "total_output_rows": 6835,
+  "rows_by_source": {
+    "kimi": 6092,
+    "glm-5.1": 743
+  },
+  "roles": {
+    "system": 6835,
+    "user": 81503,
+    "assistant": 79956
+  },
+  "skipped": {},
+  "sources": {
+    "kimi": {
+      "filename": "data/kimi/train.parquet",
+      "local_path": "/home/work/.cache/huggingface/hub/datasets--lambda--hermes-agent-reasoning-traces/snapshots/b92885e4f0161d4b2536512710e004d4892cac6e/data/kimi/train.parquet",
+      "input_rows": 7646,
+      "converted_rows": 6092,
+      "skipped": {
+        "invalid_or_no_final_assistant": 1554
+      },
+      "kept_after_dedup": 6092
+    },
+    "glm-5.1": {
+      "filename": "data/glm-5.1/train.parquet",
+      "local_path": "/home/work/.cache/huggingface/hub/datasets--lambda--hermes-agent-reasoning-traces/snapshots/b92885e4f0161d4b2536512710e004d4892cac6e/data/glm-5.1/train.parquet",
+      "input_rows": 7055,
+      "converted_rows": 743,
+      "skipped": {
+        "invalid_or_no_final_assistant": 6312
+      },
+      "kept_after_dedup": 743
+    }
+  }
+}

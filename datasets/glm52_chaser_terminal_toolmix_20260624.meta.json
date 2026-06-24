@@ -1,0 +1,104 @@
+{
+  "purpose": "GLM-5.2 chaser SFT mix: preserve Fabliq terminal behavior and add JSON/tool-call traces.",
+  "output": "/home/work/.projects/LLM-OS-Models/Terminal/fable_distillation/datasets/glm52_chaser_terminal_toolmix_20260624.jsonl",
+  "seed": 52,
+  "max_cyrillic": 0.3,
+  "sources": {
+    "fable5_terminal": {
+      "path": "fable_distillation/datasets/fable5_lfm_sft_20260623.jsonl",
+      "input": 4047,
+      "valid": 4047,
+      "missing": 0,
+      "sampled": 4047,
+      "invalid": 0,
+      "kept_after_dedup_filter": 4047
+    },
+    "phase2_reasoning": {
+      "path": "fable_distillation/datasets/phase2_reasoning_lfm_sft_20260623.jsonl",
+      "input": 281,
+      "valid": 281,
+      "missing": 0,
+      "sampled": 281,
+      "invalid": 0,
+      "kept_after_dedup_filter": 281
+    },
+    "harness_agentic_highrecall": {
+      "path": "/home/work/.data/harness1/sft_data/lfm25_agentic_sft_20260619_lfm25_highrecall_direct_refresh_v1.jsonl",
+      "input": 4140,
+      "valid": 4140,
+      "missing": 0,
+      "sampled": 4140,
+      "invalid": 0,
+      "kept_after_dedup_filter": 4140
+    },
+    "harness_mixed_highrecall": {
+      "path": "/home/work/.data/harness1/sft_data/lfm25_mixed_agentic_sft_20260619_lfm25_highrecall_direct_refresh_v1.jsonl",
+      "input": 15732,
+      "valid": 15732,
+      "missing": 0,
+      "sampled": 4000,
+      "invalid": 0,
+      "kept_after_dedup_filter": 815
+    },
+    "harness_direct_json_highrecall": {
+      "path": "/home/work/.data/harness1/sft_data/lfm25_direct_json_sft_20260619_lfm25_highrecall_direct_refresh_v1.jsonl",
+      "input": 828,
+      "valid": 828,
+      "missing": 0,
+      "sampled": 828,
+      "invalid": 0,
+      "kept_after_dedup_filter": 13
+    },
+    "harness_local_hidden_search": {
+      "path": "/home/work/.data/harness1/sft_data/local_hidden_search_agent_20260619_v1.jsonl",
+      "input": 4140,
+      "valid": 4140,
+      "missing": 0,
+      "sampled": 2000,
+      "invalid": 0,
+      "kept_after_dedup_filter": 2000
+    },
+    "harness_agentic_hardcase": {
+      "path": "/home/work/.data/harness1/sft_data/lfm25_agentic_hardcase_20260619_v1.jsonl",
+      "input": 540,
+      "valid": 540,
+      "missing": 0,
+      "sampled": 540,
+      "invalid": 0,
+      "kept_after_dedup_filter": 120
+    }
+  },
+  "total_output_rows": 11416,
+  "skipped": {
+    "duplicate": 4420
+  },
+  "final_kind": {
+    "lfm_tool_call": 3287,
+    "text": 1041,
+    "json_action": 7088
+  },
+  "final_kind_by_source": {
+    "fable5_terminal": {
+      "lfm_tool_call": 3287,
+      "text": 760
+    },
+    "phase2_reasoning": {
+      "text": 281
+    },
+    "harness_agentic_highrecall": {
+      "json_action": 4140
+    },
+    "harness_mixed_highrecall": {
+      "json_action": 815
+    },
+    "harness_direct_json_highrecall": {
+      "json_action": 13
+    },
+    "harness_local_hidden_search": {
+      "json_action": 2000
+    },
+    "harness_agentic_hardcase": {
+      "json_action": 120
+    }
+  }
+}
