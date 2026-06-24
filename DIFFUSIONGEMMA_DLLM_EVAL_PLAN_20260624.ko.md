@@ -34,43 +34,43 @@
 
 post-chaser queue는 DiffusionGemma를 먼저 실행한다.
 
-1. DiffusionGemma base vLLM 평가
+1. DiffusionGemma base Transformers dLLM 평가
 2. DiffusionGemma LoRA smoke SFT
 3. Gemma 4 12B IT smoke
 4. Qwen3.5 9B smoke
 
 ## 새 스크립트
 
-### Base dLLM vLLM 평가
+### Base dLLM Transformers 평가
 
 ```bash
 RUN_NOW=1 bash fable_distillation/scripts/run_diffusiongemma_dllm_eval_20260624.sh
 ```
 
-이 스크립트는 두 가지를 실행한다.
+이 스크립트는 Docker 없이 두 가지를 실행한다.
 
-- Docker/OpenAI backend: `scripts/replay_eval_openai_chat.py`, `scripts/openai_prompt_probe.py`
-- Offline vLLM backend: `scripts/replay_eval_vllm.py`, `scripts/vllm_prompt_probe.py`
+- TB2-lite replay: `scripts/diffusiongemma_transformers_eval.py`
+- long-output/code/tool-call probe: `scripts/diffusiongemma_transformers_eval.py`
 
-현재 로컬 PyPI index의 최신 vLLM wheel은 `0.23.0`이고, 이 wheel에는 DiffusionGemma vLLM model code가 없다. 따라서 실제 vLLM 고속 검증은 공식 recipe가 지정한 `vllm/vllm-openai:gemma` Docker image를 우선 사용한다.
+현재 로컬 PyPI index의 최신 vLLM wheel은 `0.23.0`이고, 이 wheel에는 DiffusionGemma vLLM model code가 없다. 공식 vLLM recipe는 DiffusionGemma용 `vllm/vllm-openai:gemma` image와 vLLM 0.24+ 계열을 전제로 한다.
 
-현재 컨테이너에서는 Docker CLI는 있지만 daemon이 떠 있지 않다. `docker pull vllm/vllm-openai:gemma`는 `Cannot connect to the Docker daemon`으로 실패했다. 그래서 자동 runner는 `BACKEND=auto`일 때 다음 순서로 간다.
+현재 컨테이너에서는 Docker CLI는 있지만 daemon이 떠 있지 않다. `docker pull vllm/vllm-openai:gemma`는 `Cannot connect to the Docker daemon`으로 실패했다. 따라서 이 환경에서는 Docker를 사용하지 않는다.
 
-1. Docker daemon 사용 가능: `vllm/vllm-openai:gemma` + OpenAI-compatible evaluator
-2. Docker daemon 사용 불가: HF `DiffusionGemmaForBlockDiffusion` Transformers fallback
+기본 runner는 `BACKEND=transformers`로 고정했다. 즉 post-chaser 자동 실행은 `fable_distillation/.venvs/diffusiongemma-vllm` 가상환경 안에서 HF `DiffusionGemmaForBlockDiffusion` 경로로 간다.
 
-Docker server script:
+TB2-lite는 기본적으로 8개 shard로 나누어 실행한다.
 
-```bash
-bash fable_distillation/scripts/run_diffusiongemma_vllm_docker_server_20260624.sh
-```
+- `TRANSFORMERS_SHARD_COUNT=8`
+- `TRANSFORMERS_GPUS=0,1,2,3,4,5,6,7`
+- 각 shard는 자기 GPU에 DiffusionGemma를 한 벌씩 올린다.
+- 완료 후 `scripts/merge_diffusiongemma_transformers_shards.py`가 shard 결과를 하나의 JSON으로 합친다.
 
-OpenAI-compatible evaluator:
+vLLM/OpenAI-compatible evaluator는 남겨 두되, 이 환경의 기본 자동 큐에서는 사용하지 않는다.
 
 - `scripts/replay_eval_openai_chat.py`
 - `scripts/openai_prompt_probe.py`
 
-DiffusionGemma vLLM 핵심 설정:
+DiffusionGemma vLLM을 나중에 Python wheel로 직접 쓸 수 있게 되면 적용할 핵심 설정:
 
 ```json
 {
@@ -88,13 +88,13 @@ DiffusionGemma vLLM 핵심 설정:
 }
 ```
 
-### Optional isolated vLLM env
+### Optional isolated Python env
 
 ```bash
 bash fable_distillation/scripts/setup_diffusiongemma_vllm_uv_20260624.sh
 ```
 
-기본은 기존 `.vllm-lfm-cu12`를 쓰지만, DiffusionGemma 지원이 부족하면 `uv`로 `fable_distillation/.venvs/diffusiongemma-vllm`를 만든다.
+DiffusionGemma용 Python 환경은 `uv`로 `fable_distillation/.venvs/diffusiongemma-vllm`에 만든다. 이 환경은 Docker 없이 Transformers backend 실행에 사용한다.
 
 ## 해석 기준
 

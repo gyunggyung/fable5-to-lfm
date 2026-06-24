@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# DiffusionGemma-first dLLM evaluation.
+# DiffusionGemma-first dLLM evaluation without Docker.
+# Default path: local uv env + HF Transformers DiffusionGemmaForBlockDiffusion.
 # Runs two checks:
-#   1. TB2-lite replay quality with vLLM/OpenAI-compatible server.
+#   1. TB2-lite replay quality, sharded across GPUs.
 #   2. Small long-output probe for throughput/shape.
 #
 # Dry-run by default:
@@ -16,7 +17,7 @@ FABLE_DIR="$ROOT_DIR/fable_distillation"
 cd "$ROOT_DIR"
 
 RUN_NOW="${RUN_NOW:-0}"
-RUN_ID="${RUN_ID:-20260624_diffusiongemma_dllm_base_vllm}"
+RUN_ID="${RUN_ID:-20260624_diffusiongemma_dllm_base_transformers}"
 DEFAULT_VLLM_ENV="$FABLE_DIR/.venvs/diffusiongemma-vllm"
 if [[ ! -x "$DEFAULT_VLLM_ENV/bin/python" ]]; then
   DEFAULT_VLLM_ENV="$ROOT_DIR/.vllm-lfm-cu12"
@@ -27,10 +28,10 @@ MODEL_SHORT="${MODEL_SHORT:-diffusiongemma-26b-a4b-it-base}"
 RESULTS_DIR="${RESULTS_DIR:-$FABLE_DIR/benchmarks/$RUN_ID/results}"
 LOG_DIR="${LOG_DIR:-$FABLE_DIR/benchmarks/$RUN_ID/logs}"
 PROMPT_JSONL="${PROMPT_JSONL:-$FABLE_DIR/benchmarks/20260624_dllm_probe/prompts.jsonl}"
-BACKEND="${BACKEND:-auto}"
+BACKEND="${BACKEND:-transformers}"
 BASE_URL="${BASE_URL:-http://127.0.0.1:8008/v1}"
 API_KEY="${API_KEY:-EMPTY}"
-START_DOCKER_SERVER="${START_DOCKER_SERVER:-1}"
+START_DOCKER_SERVER="${START_DOCKER_SERVER:-0}"
 CONTAINER_NAME="${CONTAINER_NAME:-diffusiongemma-vllm-gemma}"
 
 GPU="${GPU:-0}"
@@ -42,6 +43,9 @@ GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.85}"
 TB2_LIMIT="${TB2_LIMIT:-0}"
 RUN_TB2="${RUN_TB2:-1}"
 RUN_PROBE="${RUN_PROBE:-1}"
+PREFETCH_MODEL="${PREFETCH_MODEL:-1}"
+TRANSFORMERS_SHARD_COUNT="${TRANSFORMERS_SHARD_COUNT:-8}"
+TRANSFORMERS_GPUS="${TRANSFORMERS_GPUS:-0,1,2,3,4,5,6,7}"
 
 HF_OVERRIDES_JSON="${HF_OVERRIDES_JSON:-{\"diffusion_sampler\":\"entropy_bound\",\"diffusion_entropy_bound\":0.1}}"
 ENGINE_KWARGS_JSON="${ENGINE_KWARGS_JSON:-{\"diffusion_config\":{\"canvas_length\":256}}}"
@@ -49,11 +53,7 @@ ENGINE_KWARGS_JSON="${ENGINE_KWARGS_JSON:-{\"diffusion_config\":{\"canvas_length
 mkdir -p "$RESULTS_DIR" "$LOG_DIR"
 
 if [[ "$BACKEND" == "auto" ]]; then
-  if docker info >/dev/null 2>&1; then
-    BACKEND="docker_openai"
-  else
-    BACKEND="transformers"
-  fi
+  BACKEND="transformers"
 fi
 
 VENV_SITE="$VLLM_ENV/lib/python3.12/site-packages"
@@ -73,6 +73,12 @@ build_probe_cmd=(
   env -u PYTHONPATH PYTHONNOUSERSITE=1 "$VLLM_ENV/bin/python"
   "$FABLE_DIR/scripts/build_dllm_probe_prompts_20260624.py"
   --output "$PROMPT_JSONL"
+)
+
+prefetch_cmd=(
+  env -u PYTHONPATH PYTHONNOUSERSITE=1 "$VLLM_ENV/bin/python"
+  "$FABLE_DIR/scripts/prefetch_diffusiongemma_hf_20260624.py"
+  --model "$MODEL_PATH"
 )
 
 tb2_cmd=(
@@ -130,6 +136,7 @@ print_cmd() {
 }
 
 print_cmd "build probe" "${build_probe_cmd[@]}"
+print_cmd "prefetch model" "${prefetch_cmd[@]}"
 if [[ "$BACKEND" == "offline_vllm" ]]; then
   print_cmd "tb2 quality" "${tb2_cmd[@]}"
   print_cmd "long probe" "${probe_cmd[@]}"
@@ -152,6 +159,9 @@ elif [[ "$BACKEND" == "transformers" ]]; then
     transformers_cmd+=(--prompt-jsonl "$PROMPT_JSONL")
   fi
   print_cmd "transformers fallback" "${transformers_cmd[@]}"
+  if [[ "$TRANSFORMERS_SHARD_COUNT" != "1" && "$RUN_TB2" == "1" ]]; then
+    echo "transformers sharded TB2: shard_count=$TRANSFORMERS_SHARD_COUNT gpus=$TRANSFORMERS_GPUS"
+  fi
 else
   openai_tb2_cmd=(
     env -u PYTHONPATH PYTHONNOUSERSITE=1 "$VLLM_ENV/bin/python"
@@ -193,6 +203,9 @@ if [[ "$RUN_NOW" != "1" ]]; then
 fi
 
 "${build_probe_cmd[@]}" 2>&1 | tee "$LOG_DIR/build_probe.log"
+if [[ "$PREFETCH_MODEL" == "1" ]]; then
+  "${prefetch_cmd[@]}" 2>&1 | tee "$LOG_DIR/prefetch_model.log"
+fi
 if [[ "$BACKEND" == "offline_vllm" ]]; then
   if [[ "$RUN_TB2" == "1" ]]; then
     "${tb2_cmd[@]}" 2>&1 | tee "$LOG_DIR/${MODEL_SHORT}.tb2.log"
@@ -201,7 +214,64 @@ if [[ "$BACKEND" == "offline_vllm" ]]; then
     "${probe_cmd[@]}" 2>&1 | tee "$LOG_DIR/${MODEL_SHORT}.probe.log"
   fi
 elif [[ "$BACKEND" == "transformers" ]]; then
-  "${transformers_cmd[@]}" 2>&1 | tee "$LOG_DIR/${MODEL_SHORT}.transformers.log"
+  if [[ "$RUN_TB2" == "1" && "$TRANSFORMERS_SHARD_COUNT" != "1" ]]; then
+    IFS=',' read -r -a shard_gpus <<< "$TRANSFORMERS_GPUS"
+    if [[ "${#shard_gpus[@]}" -lt "$TRANSFORMERS_SHARD_COUNT" ]]; then
+      echo "TRANSFORMERS_GPUS has fewer entries than TRANSFORMERS_SHARD_COUNT" >&2
+      exit 1
+    fi
+    limit_args=()
+    if [[ "$TB2_LIMIT" != "0" ]]; then
+      limit_args=(--limit "$TB2_LIMIT")
+    fi
+    pids=()
+    for shard_idx in $(seq 0 $((TRANSFORMERS_SHARD_COUNT - 1))); do
+      shard_model_short="$(printf '%s.part%02d' "$MODEL_SHORT" "$shard_idx")"
+      shard_log="$(printf '%s/%s.transformers.part%02d.log' "$LOG_DIR" "$MODEL_SHORT" "$shard_idx")"
+      env -u PYTHONPATH PYTHONNOUSERSITE=1 CUDA_VISIBLE_DEVICES="${shard_gpus[$shard_idx]}" \
+        "$VLLM_ENV/bin/python" "$FABLE_DIR/scripts/diffusiongemma_transformers_eval.py" \
+          --model "$MODEL_PATH" \
+          --model-short "$shard_model_short" \
+          --output-dir "$RESULTS_DIR" \
+          --max-new-tokens "$MAX_TOKENS" \
+          --eval-path "${EVAL_PATH:-tb2_lite/data/replay_full.jsonl}" \
+          --shard-index "$shard_idx" \
+          --shard-count "$TRANSFORMERS_SHARD_COUNT" \
+          "${limit_args[@]}" \
+        > "$shard_log" 2>&1 &
+      pids+=("$!")
+      echo -e "$shard_idx\t${shard_gpus[$shard_idx]}\t${pids[-1]}\t$shard_log" | tee -a "$LOG_DIR/transformers_shards.tsv"
+    done
+    failed=0
+    for pid in "${pids[@]}"; do
+      if ! wait "$pid"; then
+        failed=1
+      fi
+    done
+    if [[ "$failed" != "0" ]]; then
+      echo "one or more transformers shards failed" >&2
+      exit 1
+    fi
+    env -u PYTHONPATH PYTHONNOUSERSITE=1 "$VLLM_ENV/bin/python" \
+      "$FABLE_DIR/scripts/merge_diffusiongemma_transformers_shards.py" \
+      --input-dir "$RESULTS_DIR" \
+      --glob "${MODEL_SHORT}.part*.transformers.json" \
+      --output-path "$RESULTS_DIR/${MODEL_SHORT}.json" \
+      --model-short "$MODEL_SHORT" \
+      2>&1 | tee "$LOG_DIR/${MODEL_SHORT}.merge.log"
+    if [[ "$RUN_PROBE" == "1" ]]; then
+      env -u PYTHONPATH PYTHONNOUSERSITE=1 CUDA_VISIBLE_DEVICES="${shard_gpus[0]}" \
+        "$VLLM_ENV/bin/python" "$FABLE_DIR/scripts/diffusiongemma_transformers_eval.py" \
+          --model "$MODEL_PATH" \
+          --model-short "${MODEL_SHORT}.probe" \
+          --output-dir "$RESULTS_DIR" \
+          --max-new-tokens "$MAX_TOKENS" \
+          --prompt-jsonl "$PROMPT_JSONL" \
+        2>&1 | tee "$LOG_DIR/${MODEL_SHORT}.probe.transformers.log"
+    fi
+  else
+    "${transformers_cmd[@]}" 2>&1 | tee "$LOG_DIR/${MODEL_SHORT}.transformers.log"
+  fi
 else
   if [[ "$START_DOCKER_SERVER" == "1" ]]; then
     PORT="${BASE_URL#http://127.0.0.1:}"

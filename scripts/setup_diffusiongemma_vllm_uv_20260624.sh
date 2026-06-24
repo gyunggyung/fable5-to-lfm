@@ -21,13 +21,15 @@ if [[ ! -x "$ENV_DIR/bin/python" ]]; then
   uv venv --python "$PYTHON_VERSION" "$ENV_DIR"
 fi
 uv pip install --python "$ENV_DIR/bin/python" --upgrade pip wheel setuptools
-uv pip install --python "$ENV_DIR/bin/python" "$VLLM_SPEC" "transformers>=5.0.0" "huggingface_hub>=0.35.0" "datasets>=4.0.0"
+uv pip install --python "$ENV_DIR/bin/python" "$VLLM_SPEC" "transformers>=5.0.0" "huggingface_hub>=0.35.0" "datasets>=4.0.0" "accelerate>=1.10.0"
 
 env -u PYTHONPATH PYTHONNOUSERSITE=1 "$ENV_DIR/bin/python" - <<'PY'
 import sys
 import vllm
 import transformers
+import accelerate
 print("python", sys.version)
 print("vllm", vllm.__version__)
 print("transformers", transformers.__version__)
+print("accelerate", accelerate.__version__)
 PY

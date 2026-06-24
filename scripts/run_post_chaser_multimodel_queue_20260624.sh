@@ -65,7 +65,7 @@ fi
 wait_for_chaser
 
 run_step diffusiongemma_26b_a4b_base_eval \
-  env RUN_NOW=1 \
+  env RUN_NOW=1 BACKEND=transformers \
   bash "$FABLE_DIR/scripts/run_diffusiongemma_dllm_eval_20260624.sh"
 
 run_step diffusiongemma_26b_a4b_smoke \

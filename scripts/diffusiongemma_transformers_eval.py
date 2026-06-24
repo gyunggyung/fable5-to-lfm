@@ -25,12 +25,14 @@ if str(SCRIPT_DIR) not in sys.path:
 from replay_metrics import aggregate_scores, parse_prediction, score_commands, step_bucket
 
 
-def load_jsonl(path: str, limit: int = 0) -> list[dict[str, Any]]:
+def load_jsonl(path: str, limit: int = 0, shard_index: int = 0, shard_count: int = 1) -> list[dict[str, Any]]:
     rows = []
     with Path(path).open(encoding="utf-8") as handle:
-        for line in handle:
+        for row_idx, line in enumerate(handle):
             line = line.strip()
             if not line:
+                continue
+            if shard_count > 1 and row_idx % shard_count != shard_index:
                 continue
             rows.append(json.loads(line))
             if limit and len(rows) >= limit:
@@ -98,6 +100,8 @@ def main() -> None:
     parser.add_argument("--model-short", default="diffusiongemma-26b-a4b-it-transformers")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--probe-limit", type=int, default=0)
+    parser.add_argument("--shard-index", type=int, default=0)
+    parser.add_argument("--shard-count", type=int, default=1)
     parser.add_argument("--max-new-tokens", type=int, default=1024)
     parser.add_argument("--enable-thinking", action="store_true")
     args = parser.parse_args()
@@ -110,8 +114,9 @@ def main() -> None:
         args.model,
         dtype="auto",
         device_map="auto",
+        trust_remote_code=True,
     ).eval()
-    processor = AutoProcessor.from_pretrained(args.model)
+    processor = AutoProcessor.from_pretrained(args.model, trust_remote_code=True)
     load_time = time.time() - load_start
 
     result: dict[str, Any] = {
@@ -124,7 +129,7 @@ def main() -> None:
     }
 
     if args.eval_path:
-        rows = load_jsonl(args.eval_path, args.limit)
+        rows = load_jsonl(args.eval_path, args.limit, args.shard_index, args.shard_count)
         per_step = []
         total_tokens = 0
         start_all = time.time()
@@ -169,6 +174,8 @@ def main() -> None:
         gen_time = time.time() - start_all
         result["tb2"] = {
             "eval_path": args.eval_path,
+            "shard_index": args.shard_index,
+            "shard_count": args.shard_count,
             "gen_time_sec": round(gen_time, 2),
             "output_tokens": total_tokens,
             "output_tokens_per_sec": round(total_tokens / max(gen_time, 1e-9), 2),
@@ -176,6 +183,8 @@ def main() -> None:
             "aggregate": aggregate_scores(per_step),
             "per_step": per_step,
         }
+        result["aggregate"] = result["tb2"]["aggregate"]
+        result["per_step"] = per_step
 
     if args.prompt_jsonl:
         rows = load_jsonl(args.prompt_jsonl, args.probe_limit)

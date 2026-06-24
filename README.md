@@ -31,7 +31,7 @@ Current GLM-5.2 chaser run:
 - Base model: `Fabliq-8B-Agent-Reasoning`
 - Goal: beat the current TB2-lite vLLM score `51.59`
 - Multi-model setup: Gemma 4 12B IT, Qwen3.5 9B, and DiffusionGemma 26B-A4B smoke runners are staged under `scripts/` and `configs/`.
-- DiffusionGemma priority: dLLM base vLLM eval now runs before Gemma/Qwen smoke jobs.
+- DiffusionGemma priority: dLLM base eval now runs before Gemma/Qwen smoke jobs. Docker is not used; the default path is the local uv env plus Transformers `DiffusionGemmaForBlockDiffusion`, sharded across GPUs for TB2-lite.
 - Docs: [TB2 vLLM benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md), [GLM-5.2 chaser experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md), [multi-model GLM-5.2 chaser plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md), [DiffusionGemma dLLM eval plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md)
 
 ---
@@ -142,11 +142,11 @@ See [DATA_SOURCES_20260623.ko.md](./DATA_SOURCES_20260623.ko.md) for detailed da
 - `build_hermes_agent_traces_mix_20260624.py` — Hermes Kimi/GLM agent traces → chat SFT JSONL
 - `build_dllm_probe_prompts_20260624.py` — small long/code/tool-call prompt suite for dLLM behavior checks
 - `vllm_prompt_probe.py` — vLLM long-output speed/shape probe
-- `run_diffusiongemma_dllm_eval_20260624.sh` — DiffusionGemma base TB2-lite + long-output vLLM eval
+- `run_diffusiongemma_dllm_eval_20260624.sh` — DiffusionGemma base TB2-lite + long-output Transformers dLLM eval
 - `run_multifamily_sft_smoke_20260624.sh` — Gemma/Qwen LoRA smoke SFT queue
 - `run_diffusiongemma_fable_lora_20260624.sh` — DiffusionGemma NeMo AutoModel LoRA smoke queue
 - `run_post_chaser_multimodel_queue_20260624.sh` — waits for the current chaser run, then launches DiffusionGemma eval/smoke before Gemma/Qwen jobs
-- `setup_diffusiongemma_vllm_uv_20260624.sh` — optional isolated uv vLLM env for DiffusionGemma
+- `setup_diffusiongemma_vllm_uv_20260624.sh` — isolated uv env for DiffusionGemma Transformers eval, with vLLM wheel kept for future direct support
 - `replay_eval_vllm.py`, `replay_metrics.py`, `summarize_replay_results.py` — local replay evaluator
 
 ### Training code (`training/`)

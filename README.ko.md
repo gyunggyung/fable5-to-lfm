@@ -31,7 +31,7 @@
 - 베이스 모델: `Fabliq-8B-Agent-Reasoning`
 - 목표: 현재 TB2-lite vLLM 점수 `51.59` 돌파
 - 멀티모델 준비: Gemma 4 12B IT, Qwen3.5 9B, DiffusionGemma 26B-A4B smoke runner를 `scripts/`, `configs/` 아래에 준비
-- DiffusionGemma 우선순위: dLLM base vLLM 평가를 Gemma/Qwen smoke보다 먼저 실행
+- DiffusionGemma 우선순위: dLLM base 평가를 Gemma/Qwen smoke보다 먼저 실행. Docker는 쓰지 않고, 로컬 uv 가상환경의 Transformers `DiffusionGemmaForBlockDiffusion` backend를 GPU shard 방식으로 돌린다.
 - 문서: [TB2 vLLM benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md), [GLM-5.2 chaser experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md), [multi-model GLM-5.2 chaser plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md), [DiffusionGemma dLLM eval plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md)
 
 ---
@@ -143,11 +143,11 @@ TB2-lite vLLM 근거:
 - `build_hermes_agent_traces_mix_20260624.py` — Hermes Kimi/GLM agent traces → chat SFT JSONL 변환
 - `build_dllm_probe_prompts_20260624.py` — dLLM 긴 출력/code/tool-call 확인용 작은 prompt suite
 - `vllm_prompt_probe.py` — vLLM 긴 출력 속도/형태 probe
-- `run_diffusiongemma_dllm_eval_20260624.sh` — DiffusionGemma base TB2-lite + long-output vLLM 평가
+- `run_diffusiongemma_dllm_eval_20260624.sh` — DiffusionGemma base TB2-lite + long-output Transformers dLLM 평가
 - `run_multifamily_sft_smoke_20260624.sh` — Gemma/Qwen LoRA smoke SFT queue
 - `run_diffusiongemma_fable_lora_20260624.sh` — DiffusionGemma NeMo AutoModel LoRA smoke queue
 - `run_post_chaser_multimodel_queue_20260624.sh` — 현재 chaser run 종료 후 DiffusionGemma 평가/스모크를 먼저 실행하고 Gemma/Qwen을 이어서 실행하는 watcher
-- `setup_diffusiongemma_vllm_uv_20260624.sh` — DiffusionGemma용 isolated uv vLLM env 준비 스크립트
+- `setup_diffusiongemma_vllm_uv_20260624.sh` — DiffusionGemma Transformers 평가용 isolated uv env 준비 스크립트, vLLM wheel은 향후 직접 지원 대비용
 - `replay_eval_vllm.py`, `replay_metrics.py`, `summarize_replay_results.py` — local replay evaluator
 
 ### 학습 코드 (`training/`)
