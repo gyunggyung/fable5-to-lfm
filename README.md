@@ -39,6 +39,7 @@ Current 2026-06-24 experiment status:
 - Next DiffusionGemma run is now retargeted from raw next-action to strength tasks: Fable terminal/tool-call traces + structured JSON/tool-call repair, using `scripts/build_diffusiongemma_strength_mix_20260624.py` and `configs/diffusiongemma_26b_a4b_strength_lora_20260624.yaml`. The first retry reached step 199, then hit a NeMo PEFT optimizer safetensors checkpoint bug; the runner now uses `scripts/diffusiongemma_finetune_skip_peft_optim_ckpt_20260624.py` to keep adapter checkpoints and skip optimizer checkpoints.
 - Docs: [current experiment status](./CURRENT_EXPERIMENT_STATUS_20260624.ko.md), [TB2 vLLM benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md), [GLM-5.2 chaser experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md), [multi-model GLM-5.2 chaser plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md), [DiffusionGemma dLLM eval plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md), [DiffusionGemma strength tasks](./DIFFUSIONGEMMA_STRENGTH_TASKS_20260624.ko.md)
 - Latest handoff: [2026-06-24 experiment handoff](./EXPERIMENT_HANDOFF_20260624.ko.md)
+- Next-action handoff for Claude Code: [2026-06-25 Claude Code next actions](./NEXT_ACTIONS_CLAUDE_CODE_20260625.ko.md)
 
 ---
 
