@@ -22,7 +22,7 @@ sequence_len: 2048
 sample_packing: true
 pad_to_sequence_len: true
 val_set_size: 0.0
-dataset_processes: 8
+dataset_num_proc: 8
 
 lora_r: 16
 lora_alpha: 32
@@ -70,6 +70,6 @@ fsdp_config:
 special_tokens:
   pad_token: <|endoftext|>
 
-resume_from_checkpoint: true
+auto_resume_from_checkpoints: true
 saves_total_limit: 4
 save_safetensors: true
