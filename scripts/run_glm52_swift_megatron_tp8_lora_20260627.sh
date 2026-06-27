@@ -24,6 +24,7 @@ export NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
 MODEL_SLUG="${MODEL_SLUG:-GLM-5.2-Agentic-Fable5-Composer2.5-TP8-LoRA}"
 RUN_ID="${RUN_ID:-20260627_glm52_swift_megatron_tp8_lora}"
 SWIFT_ENV="${SWIFT_ENV:-/home/work/.cache/fable_distillation/venvs/glm52-swift-megatron}"
+SWIFT_SITE="$SWIFT_ENV/lib/python3.12/site-packages"
 SOURCE_JSONL="${SOURCE_JSONL:-$FABLE_DIR/datasets/official_agentic_sft_mix_20260627.jsonl}"
 SWIFT_JSONL="${SWIFT_JSONL:-$FABLE_DIR/datasets/official_agentic_sft_mix_20260627.swift_agent.jsonl}"
 OUTPUT_DIR="${OUTPUT_DIR:-/home/work/.data/harness1/models/zai-org__GLM-5.2__${MODEL_SLUG}-20260627}"
@@ -31,6 +32,7 @@ LOG_DIR="${LOG_DIR:-$FABLE_DIR/logs/$RUN_ID}"
 MODEL_CARD="${MODEL_CARD:-$FABLE_DIR/model_cards/GLM-5.2-Agentic-Fable5-Composer2.5-TP8-LoRA-README.md}"
 
 mkdir -p "$LOG_DIR" "$(dirname "$OUTPUT_DIR")" "$MODELSCOPE_CACHE"
+export LD_LIBRARY_PATH="$SWIFT_SITE/nvidia/cublas/lib:$SWIFT_SITE/nvidia/cudnn/lib:$SWIFT_SITE/nvidia/cuda_runtime/lib:${LD_LIBRARY_PATH:-}"
 
 if [[ ! -x "$SWIFT_ENV/bin/swift" && ! -x "$SWIFT_ENV/bin/megatron" ]]; then
   echo "missing swift/megatron env: $SWIFT_ENV" >&2
