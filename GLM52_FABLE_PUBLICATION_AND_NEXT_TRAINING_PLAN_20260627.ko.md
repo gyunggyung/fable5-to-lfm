@@ -250,6 +250,32 @@ tmux kill-session -t fable_glm52_swift_offload_smoke_20260627
 - checkpoint가 생겼다면 같은 `OUTPUT_DIR`로 다시 실행한다.
 - checkpoint가 없으면 같은 명령 재실행은 처음부터 시작한다.
 
+2026-06-27 09:55 UTC / 18:55 KST 실행 상태:
+
+```text
+tmux: fable_glm52_swift_offload_smoke_20260627
+run_id: 20260627_glm52_fp8_swift_offload_smoke_retry7
+log: logs/20260627_glm52_fp8_swift_offload_smoke_retry7/train.log
+output: /home/work/.data/harness1/models/zai-org__GLM-5.2__GLM-5.2-FP8-Agentic-Fable5-Composer2.5-LoRA-20260627/v0-20260627-184743
+```
+
+현재 확인:
+
+```text
+status: running
+GPU memory: about 1.5GiB per GPU
+CPU RSS: about 58-61GiB per rank, 8 ranks
+dataset: train_dataset printed
+train step: not reached yet
+adapter checkpoint: none yet
+```
+
+해석:
+
+- 이전처럼 argument/template 단계에서 바로 실패하지 않았다.
+- `USE_CPU_INITIALIZATION=true`, `OFFLOAD_MODEL=true`, `OFFLOAD_BRIDGE=true`, `OPTIMIZER_CPU_OFFLOAD=true` 때문에 GPU VRAM은 아직 낮다.
+- 이 run은 성능 run이 아니라 GLM-5.2에서 최초 `train step >= 1`과 adapter save 가능 여부를 확인하는 smoke다.
+
 ### 우선순위 2: GLM-5.2는 teacher, trainable base에 Fable adapter 학습
 
 GLM 자체 adapter가 계속 막히면 GPU를 비우지 말고 다음 trainable base로 Fable-style adapter를 만든다.
@@ -281,6 +307,14 @@ env -u PYTHONPATH PYTHONNOUSERSITE=1 \
   --allow-empty \
   --repo-id LLM-OS-Models/GLM-5.2-FP8-Agentic-Fable5-Composer2.5-LoRA \
   --commit-message "Initialize GLM-5.2 Fable LoRA model card"
+```
+
+2026-06-27 09:55 UTC 확인:
+
+```text
+result: failed
+error: 401 Unauthorized at https://huggingface.co/api/repos/create
+action needed: set HF_TOKEN or HUGGINGFACE_HUB_TOKEN with write access to LLM-OS-Models
 ```
 
 checkpoint 자동 업로드 watcher:
