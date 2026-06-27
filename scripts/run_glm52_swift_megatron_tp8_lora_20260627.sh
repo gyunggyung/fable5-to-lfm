@@ -25,6 +25,7 @@ MODEL_SLUG="${MODEL_SLUG:-GLM-5.2-Agentic-Fable5-Composer2.5-TP8-LoRA}"
 RUN_ID="${RUN_ID:-20260627_glm52_swift_megatron_tp8_lora}"
 SWIFT_ENV="${SWIFT_ENV:-/home/work/.cache/fable_distillation/venvs/glm52-swift-megatron}"
 SWIFT_SITE="$SWIFT_ENV/lib/python3.12/site-packages"
+GLM52_MODEL="${GLM52_MODEL:-/home/work/.data/huggingface/hub/models--zai-org--GLM-5.2/snapshots/f2263102df303b2faa54a6861a29d1770ce846c0}"
 SOURCE_JSONL="${SOURCE_JSONL:-$FABLE_DIR/datasets/official_agentic_sft_mix_20260627.jsonl}"
 SWIFT_JSONL="${SWIFT_JSONL:-$FABLE_DIR/datasets/official_agentic_sft_mix_20260627.swift_agent.jsonl}"
 OUTPUT_DIR="${OUTPUT_DIR:-/home/work/.data/harness1/models/zai-org__GLM-5.2__${MODEL_SLUG}-20260627}"
@@ -50,6 +51,7 @@ if [[ "${RUN_NOW:-0}" != "1" ]]; then
   echo "DRY-RUN. Set RUN_NOW=1 to execute."
   echo "RUN_ID=$RUN_ID"
   echo "MODEL_SLUG=$MODEL_SLUG"
+  echo "GLM52_MODEL=$GLM52_MODEL"
   echo "SWIFT_ENV=$SWIFT_ENV"
   echo "SWIFT_JSONL=$SWIFT_JSONL"
   echo "OUTPUT_DIR=$OUTPUT_DIR"
@@ -65,7 +67,8 @@ env -u PYTHONPATH PYTHONNOUSERSITE=1 \
   PYTORCH_CUDA_ALLOC_CONF="$PYTORCH_CUDA_ALLOC_CONF" \
   NPROC_PER_NODE="$NPROC_PER_NODE" \
   "$SWIFT_ENV/bin/megatron" sft \
-    --model zai-org/GLM-5.2 \
+    --model "$GLM52_MODEL" \
+    --use_hf true \
     --save_safetensors true \
     --dataset "$SWIFT_JSONL" \
     --tensor_model_parallel_size 8 \
