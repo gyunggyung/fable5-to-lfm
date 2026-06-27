@@ -91,7 +91,8 @@ env -u PYTHONPATH PYTHONNOUSERSITE=1 \
     --output_dir "$OUTPUT_DIR" \
     --save_steps "${SAVE_STEPS:-25}" \
     --max_length "${MAX_LENGTH:-2048}" \
-    --template "${SWIFT_TEMPLATE:-default}" \
+    --template "${SWIFT_TEMPLATE:-glm5_2}" \
+    --agent_template "${SWIFT_AGENT_TEMPLATE:-glm5_1}" \
     --dataloader_num_workers 4 \
     --no_save_optim true \
     --no_save_rng true \
