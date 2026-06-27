@@ -1,10 +1,44 @@
 # GLM-5.2-FP8 Fable 스타일 튜닝/평가 상태 (2026-06-27)
 
-작성 시각: 2026-06-27 02:18 UTC / 2026-06-27 11:18 KST
+작성 시각: 2026-06-27 04:08 UTC / 2026-06-27 13:08 KST
 
 ## 한줄 결론
 
-GLM-5.2-FP8 다운로드와 Fable/Mythos 스타일 데이터 준비는 끝났다. 다만 현재 HF Trainer + DeepSpeed ZeRO-3 LoRA smoke는 8xH200 학습 경로로 안전하지 않다. 15% weight 로딩에서 GPU VRAM은 GPU당 약 1GB 그대로였고, rank별 CPU RSS가 150-179GB까지 증가해 CPU 복제 로딩으로 판단하고 OOM 전에 중단했다.
+GLM-5.2-FP8 다운로드와 Fable/Mythos 스타일 데이터 준비는 끝났다. vLLM `0.23.0+cu129` 서버도 8xH200에서 정상 기동했고 OpenAI-compatible probe 3개가 통과했다. 그러나 FP8 checkpoint 직접 LoRA 학습은 fine-grained FP8 matmul backward 미지원으로 실패했다. 실제 학습 경로는 `zai-org/GLM-5.2` BF16 원본을 4bit BitsAndBytes QLoRA로 로드하는 방식으로 전환했다.
+
+## 최신 업데이트 (2026-06-27 13:08 KST)
+
+- GLM-5.2-FP8 vLLM server 성공:
+  - env: `.venvs/glm52-vllm-cu129-release-driver570`
+  - vLLM: `0.23.0+cu129`
+  - torch: `2.11.0+cu129`
+  - transformers: `5.12.1`
+  - launch: `MAX_MODEL_LEN=131072 MAX_NUM_SEQS=8 MAX_NUM_BATCHED_TOKENS=16384 RUN_NOW=1 bash scripts/run_glm52_fp8_vllm_server_20260627.sh`
+  - model load: worker당 `91.82 GiB`, 약 `1527s`
+  - KV cache: `465,088 tokens`, 131,072-token request 기준 concurrency `3.55x`
+  - CUDA graph capture: `97s`, 약 `1.33 GiB`
+  - probe: 3개 prompt 모두 성공, 응답 시간 약 `6.79-7.54s`
+- GLM HF Trainer + ZeRO-3 path는 계속 보류:
+  - `FP8 model on CPU` 경고와 rank별 CPU RSS 증가가 반복된다.
+  - full run 시작 금지. 문서화/비교용으로만 남긴다.
+- 새 GLM device-map LoRA/QLoRA path 추가:
+  - trainer: `training/train_glm52_fp8_device_map_lora.py`
+  - runner: `scripts/run_glm52_fp8_device_map_lora_20260627.sh`
+  - BF16 QLoRA runner: `scripts/run_glm52_bf16_qlora_device_map_20260627.sh`
+  - BF16 download runner: `scripts/download_glm52_bf16_20260627.sh`
+  - 기본 env: `.venvs/glm52-vllm-cu129-release-driver570`
+  - 핵심 설정: `HF_DEACTIVATE_ASYNC_LOAD=1`, main-thread CUDA warmup, `device_map=auto`, `gpu_max_memory_gib=132`
+  - 추가 의존성: `peft 0.19.1`, `accelerate 1.14.0`, `datasets 5.0.0`, `kernels 0.12.3`
+  - 주의: transformers 5.12.1은 `kernels>=0.12,<0.13`을 요구한다. `kernels 0.16.0`은 import 단계에서 깨진다.
+- FP8 direct LoRA smoke 결과:
+  - CUDA init, tokenizer, 8GPU device-map 로딩, LoRA attach까지는 성공.
+  - 1-step backward에서 실패: `w8a8_block_dynamic_fp8_matmul` autograd formula 없음.
+  - 판단: FP8은 vLLM serving/eval 전용으로 유지하고 학습에는 쓰지 않는다.
+- 현재 긴 작업:
+  - session: `fable_glm52_bf16_download`
+  - log: `logs/20260627_glm52_bf16_download/download.log`
+  - 목적: trainable BF16 원본 `zai-org/GLM-5.2`를 `/home/work/.data/huggingface/hub`에 다운로드.
+  - runbook: `GLM52_FABLE_QLORA_RUNBOOK_20260627.ko.md`
 
 ## 현재 상태
 
@@ -12,8 +46,9 @@ GLM-5.2-FP8 다운로드와 Fable/Mythos 스타일 데이터 준비는 끝났다
 - HF cache: `/home/work/.data/huggingface/hub`
 - GLM snapshot: `/home/work/.data/huggingface/hub/models--zai-org--GLM-5.2-FP8/snapshots/70311cfa0158cce7dd2cf5d2e04f68e3fdc3efc1`
 - GLM cache size: 약 `707G`
-- GPU 상태: GLM smoke는 중단됨. GPU compute app 없음. GPU 메모리는 1MiB 수준까지 회수됨.
-- Git 상태: 로컬 `main`은 `origin/main`보다 2커밋 앞섬.
+- BF16 GLM-5.2 dry-run: safetensors `282` shards, 대부분 `5.4G`, 총량 약 `1.5T`
+- GPU 상태: 학습/서빙 compute app 없음. GPU 메모리는 1MiB 수준까지 회수됨.
+- Git 상태: 로컬 `main`은 `origin/main`보다 4커밋 이상 앞섬.
 - Push 상태: HTTPS GitHub credential 없음으로 실패. 에러는 `fatal: could not read Username for 'https://github.com': No such device or address`.
 
 ## 이미 준비한 데이터
@@ -57,7 +92,11 @@ datasets/official_agentic_sft_mix_20260627.meta.json
 - `scripts/setup_glm52_vllm_uv_20260627.sh`
 - `scripts/run_glm52_fp8_vllm_server_20260627.sh`
 - `scripts/probe_glm52_vllm_server_20260627.py`
+- `scripts/run_glm52_fp8_device_map_lora_20260627.sh`
+- `scripts/download_glm52_bf16_20260627.sh`
+- `scripts/run_glm52_bf16_qlora_device_map_20260627.sh`
 - `training/train_multifamily_chat_sft.py`
+- `training/train_glm52_fp8_device_map_lora.py`
 
 `training/train_multifamily_chat_sft.py`에는 다음 GLM 호환성 수정이 들어갔다.
 
@@ -86,7 +125,7 @@ FP8 quantizer가 `config.num_experts`를 기대했는데 GLM config에는 `n_rou
 
 - GLM config compat patch 추가.
 
-### 3차/최신 smoke 중단
+### 3차 smoke 중단
 
 DeepSpeed 설정과 `HfDeepSpeedConfig`를 넣고 다시 시작했지만, 다음 패턴이 나왔다.
 
@@ -98,6 +137,28 @@ DeepSpeed 설정과 `HfDeepSpeedConfig`를 넣고 다시 시작했지만, 다음
 판단:
 
 이 경로는 8xH200 tensor/ZeRO shard 학습이 아니라 rank별 CPU 복제 로딩에 가깝다. smoke 목적은 학습 가능 경로 확인이므로 OOM 전에 중단했다.
+
+### 4차 FP8 device-map LoRA 실패
+
+단일 프로세스 `device_map=auto` 방식으로 FP8 base를 8GPU에 직접 분산 로딩하는 경로를 추가했다. `HF_DEACTIVATE_ASYNC_LOAD=1`, main-thread CUDA warmup, `kernels==0.12.3`, `TRANSFORMERS_DISABLE_DEEPGEMM_LINEAR=1`을 적용했다.
+
+결과:
+
+- tokenizer/cache 생성 성공
+- GLM-5.2-FP8 weight `2160/2160` 로딩 성공
+- LoRA attach 성공
+- trainable params: `112,459,776`
+- forward 후 backward에서 실패
+
+실패 원문:
+
+```text
+RuntimeError: Trying to backward through _finegrained_fp8_cuda_...w8a8_block_dynamic_fp8_matmul.default but no autograd formula was registered.
+```
+
+판단:
+
+현재 Transformers fine-grained FP8 inference kernel은 이 GLM FP8 checkpoint를 학습시키는 backward를 제공하지 않는다. 이 경로는 더 밀지 않는다. FP8은 vLLM serving/eval 전용으로 유지한다.
 
 ## 공식 근거
 
@@ -185,27 +246,80 @@ python scripts/probe_glm52_vllm_server_20260627.py \
 1. vLLM으로 GLM-5.2-FP8 base를 공식-adjacent prompt/probe에서 정상 serving.
 2. Tool-Decathlon/MCP-Atlas/Terminal-Bench 2.1 중 접근 가능한 공식 public harness 확인.
 3. 우리 Fable/Mythos 스타일 데이터가 직접 개선할 가능성이 높은 것은 tool-call routing, MCP first-tool selection, terminal JSON action 안정성이다.
-4. GLM 743B급 LoRA는 현재 HF Trainer path가 불안정하므로, full 모델 튜닝은 Megatron/DeepSpeed-MoE/Unsloth GLM 지원 여부를 따로 검증해야 한다.
-5. 바로 성능 개선 실험이 필요하면 Qwen3.5-9B/Gemma 4 12B 계열에 같은 `official_agentic_sft_mix_20260627.jsonl`을 먼저 적용하고, vLLM 평가로 방법론을 검증한다.
+4. GLM FP8 direct training은 막혔으므로 BF16 원본을 4bit QLoRA로 로드해 adapter만 학습한다.
+5. 바로 비교 가능한 공식 목표는 `MCP-Atlas (Public Set) 76.8 -> 78.0+`, `Tool-Decathlon 48.2 -> 52.8+`, `Terminal-Bench 2.1 (Terminus-2) 81.0 -> 82.0+`다.
 
-### C. GLM 튜닝 경로 재검증
+### C. GLM BF16 QLoRA 튜닝 경로
 
-GLM 튜닝을 계속 시도하려면 다음을 먼저 확인한다.
+FP8 LoRA long run은 시작하지 않는다. 학습은 BF16 원본 `zai-org/GLM-5.2` 다운로드 후 QLoRA로 진행한다.
 
-- vLLM/Transformers 최신 GLM 지원 env와 training env를 분리한다.
-- current HF Trainer + ZeRO-3가 FP8 quantized GLM을 model-load 단계에서 실제 shard하는지 확인하는 1-step smoke를 만든다.
-- rank별 RSS가 진행률 20% 이전에 120GB를 넘으면 즉시 중단한다.
-- GPU VRAM이 model-load 이후 GPU당 수십 GB 이상으로 올라가지 않으면 학습으로 판단하지 않는다.
-- full run은 smoke가 `model loaded`, `LoRA/model trainable setup complete`, `trainer.train complete`를 통과한 뒤에만 시작한다.
+현재 다운로드:
+
+```bash
+tmux ls | rg fable_glm52_bf16_download
+tail -f logs/20260627_glm52_bf16_download/download.log
+df -h /home/work/.data
+```
+
+다운로드 재시작:
+
+```bash
+cd /home/work/.projects/LLM-OS-Models/Terminal/fable_distillation
+RUN_NOW=1 bash scripts/download_glm52_bf16_20260627.sh
+```
+
+QLoRA dry-run:
+
+```bash
+bash scripts/run_glm52_bf16_qlora_device_map_20260627.sh
+```
+
+다운로드 완료 후 1-step smoke:
+
+```bash
+RUN_NOW=1 \
+RUN_ID=20260627_glm52_bf16_qlora_smoke \
+OUTPUT_DIR=/home/work/.data/harness1/models/GLM-5.2__Fable-OfficialAgentic-QLoRA-smoke-20260627 \
+MAX_STEPS=1 MAX_TRAIN_ROWS=2 MAX_SEQ_LENGTH=512 SAVE_STEPS=1 SAVE_TOTAL_LIMIT=1 \
+bash scripts/run_glm52_bf16_qlora_device_map_20260627.sh
+```
+
+pilot 25 steps:
+
+```bash
+RUN_NOW=1 \
+RUN_ID=20260627_glm52_bf16_qlora_pilot25 \
+OUTPUT_DIR=/home/work/.data/harness1/models/GLM-5.2__Fable-OfficialAgentic-QLoRA-pilot25-20260627 \
+MAX_STEPS=25 MAX_SEQ_LENGTH=1024 SAVE_STEPS=5 SAVE_TOTAL_LIMIT=2 \
+bash scripts/run_glm52_bf16_qlora_device_map_20260627.sh
+```
+
+long resumable run은 pilot step time을 확인한 뒤 시작한다.
+
+```bash
+tmux new-session -d -s fable_glm52_bf16_qlora_long \
+  "cd /home/work/.projects/LLM-OS-Models/Terminal/fable_distillation && RUN_NOW=1 bash scripts/run_glm52_bf16_qlora_device_map_20260627.sh"
+```
 
 ## 중단/재개 명령
+
+다운로드 중단:
+
+```bash
+cd /home/work/.projects/LLM-OS-Models/Terminal/fable_distillation
+tmux kill-session -t fable_glm52_bf16_download 2>/dev/null || true
+pgrep -af 'hf download zai-org/GLM-5.2|download_glm52_bf16_20260627.sh'
+```
 
 GLM smoke/training 중단:
 
 ```bash
 cd /home/work/.projects/LLM-OS-Models/Terminal/fable_distillation
 tmux kill-session -t fable_glm52_retry_train 2>/dev/null || true
+tmux kill-session -t fable_glm52_device_map_smoke 2>/dev/null || true
+tmux kill-session -t fable_glm52_bf16_qlora_long 2>/dev/null || true
 pgrep -af 'train_multifamily_chat_sft.py|torch.distributed.run'
+pgrep -af 'train_glm52_fp8_device_map_lora.py'
 ```
 
 필요한 PID만 골라서:
@@ -243,6 +357,8 @@ bash scripts/upload_adapter_to_hf_20260627.sh
 
 - `eca48b2 Prepare GLM-5.2 FP8 Fable LoRA workflow`
 - `5395f28 Fix GLM FP8 training compatibility`
+- `513a7fa Document GLM FP8 status and vLLM setup`
+- `8c1669d Use CUDA 12.9 vLLM wheel for GLM server`
 
 push는 GitHub credential 문제로 실패했다. 현재 remote:
 

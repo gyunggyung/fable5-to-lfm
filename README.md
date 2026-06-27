@@ -26,7 +26,7 @@ Main takeaway: **ToolBench foundation + Fable terminal traces beat raw-base Mega
 
 Current 2026-06-24 experiment status:
 
-- 2026-06-27 GLM-5.2-FP8 status: download completed under `/home/work/.data/huggingface`, Fable/Mythos-style official-agentic SFT mix built with 19,536 rows, and GLM HF Trainer LoRA smoke was stopped because model loading was CPU-replicating across ranks instead of using 8xH200 memory. Next safe path is GLM vLLM 0.23+ serving/evaluation first, then a separate verified tuning path. See [GLM-5.2-FP8 Fable tuning status](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md).
+- 2026-06-27 GLM-5.2 status: FP8 download completed under `/home/work/.data/huggingface`, Fable/Mythos-style official-agentic SFT mix built with 19,536 rows, and GLM vLLM `0.23.0+cu129` serving/probe succeeded on 8xH200. FP8 direct LoRA training is blocked by the fine-grained FP8 matmul backward path, so trainable GLM work has moved to `zai-org/GLM-5.2` BF16 -> 4-bit QLoRA. BF16 download is running in `tmux` session `fable_glm52_bf16_download`. See [GLM-5.2-FP8 Fable tuning status](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md) and [GLM-5.2 Fable QLoRA runbook](./GLM52_FABLE_QLORA_RUNBOOK_20260627.ko.md).
 - Running script: `scripts/run_glm52_chaser_mix_sft_20260624.sh`
 - Training data: `datasets/glm52_chaser_terminal_toolmix_20260624.jsonl` (11,416 rows)
 - Base model: `Fabliq-8B-Agent-Reasoning`
@@ -38,7 +38,7 @@ Current 2026-06-24 experiment status:
 - GLM-5.2 chaser `checkpoint-1400` vLLM sharded TB2-lite eval completed at `50.56`, below both final `51.13` and the current best `51.59`.
 - Qwen3.5-9B LoRA SFT300 completed at train loss `0.6287` and the adapter merged, but the merged checkpoint currently fails vLLM load with a VLM/text wrapper weight-key mismatch. DiffusionGemma work is taking priority while that export path is fixed later.
 - Next DiffusionGemma run is now retargeted from raw next-action to strength tasks: Fable terminal/tool-call traces + structured JSON/tool-call repair, using `scripts/build_diffusiongemma_strength_mix_20260624.py` and `configs/diffusiongemma_26b_a4b_strength_lora_20260624.yaml`. The first retry reached step 199, then hit a NeMo PEFT optimizer safetensors checkpoint bug; the runner now uses `scripts/diffusiongemma_finetune_skip_peft_optim_ckpt_20260624.py` to keep adapter checkpoints and skip optimizer checkpoints.
-- Docs: [current experiment status](./CURRENT_EXPERIMENT_STATUS_20260624.ko.md), [TB2 vLLM benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md), [GLM-5.2 chaser experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md), [multi-model GLM-5.2 chaser plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md), [DiffusionGemma dLLM eval plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md), [DiffusionGemma strength tasks](./DIFFUSIONGEMMA_STRENGTH_TASKS_20260624.ko.md)
+- Docs: [current experiment status](./CURRENT_EXPERIMENT_STATUS_20260624.ko.md), [TB2 vLLM benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md), [GLM-5.2-FP8 Fable tuning status](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md), [GLM-5.2 Fable QLoRA runbook](./GLM52_FABLE_QLORA_RUNBOOK_20260627.ko.md), [GLM-5.2 chaser experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md), [multi-model GLM-5.2 chaser plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md), [DiffusionGemma dLLM eval plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md), [DiffusionGemma strength tasks](./DIFFUSIONGEMMA_STRENGTH_TASKS_20260624.ko.md)
 - Latest handoff: [2026-06-24 experiment handoff](./EXPERIMENT_HANDOFF_20260624.ko.md)
 - Next-action handoff for Claude Code: [2026-06-25 Claude Code next actions](./NEXT_ACTIONS_CLAUDE_CODE_20260625.ko.md)
 
@@ -165,11 +165,15 @@ See [DATA_SOURCES_20260623.ko.md](./DATA_SOURCES_20260623.ko.md) for detailed da
 - `setup_glm52_vllm_uv_20260627.sh` — Docker-free GLM-5.2-FP8 vLLM 0.23 env setup
 - `run_glm52_fp8_vllm_server_20260627.sh` — official-style 8-way tensor-parallel GLM-5.2-FP8 vLLM server launcher
 - `probe_glm52_vllm_server_20260627.py` — OpenAI-compatible smoke probe for a running GLM vLLM server
+- `run_glm52_fp8_device_map_lora_20260627.sh` — single-process 8GPU `device_map=auto` GLM-5.2-FP8 LoRA smoke/long-run launcher
+- `download_glm52_bf16_20260627.sh` — resumable BF16 `zai-org/GLM-5.2` download into `/home/work/.data/huggingface`
+- `run_glm52_bf16_qlora_device_map_20260627.sh` — trainable GLM-5.2 BF16 -> 4-bit QLoRA launcher
 - `replay_eval_vllm.py`, `replay_metrics.py`, `summarize_replay_results.py` — local replay evaluator
 
 ### Training code (`training/`)
 - `train_lfm25_rlvr_json_sft.py` — main training (full SFT + LoRA, FSDP)
 - `train_multifamily_chat_sft.py` — generic Gemma/Qwen chat SFT trainer for LoRA smoke runs
+- `train_glm52_fp8_device_map_lora.py` — GLM-5.2 `device_map=auto` LoRA/QLoRA trainer for the no-Docker 8xH200 path
 - `build_lfm25_agentic_sft.py`, `build_lfm25_rlvr_json_sft.py`, `mix_lfm25_sft_jsonl.py`
 
 ### Eval code (`eval_scripts/`)
@@ -215,6 +219,7 @@ Apache 2.0 (inherited from LiquidAI LFM base).
 - [Final Report](./FINAL_REPORT_20260624.ko.md) (Korean, comprehensive results)
 - [TB2 vLLM Benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md)
 - [GLM-5.2-FP8 Fable Tuning Status](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md)
+- [GLM-5.2 Fable QLoRA Runbook](./GLM52_FABLE_QLORA_RUNBOOK_20260627.ko.md)
 - [GLM-5.2 Chaser Experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md)
 - [Multi-model GLM-5.2 Chaser Plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md)
 - [DiffusionGemma dLLM Eval Plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md)

@@ -26,7 +26,7 @@
 
 현재 2026-06-24 실험 상태:
 
-- 2026-06-27 GLM-5.2-FP8 상태: `/home/work/.data/huggingface` 아래 다운로드 완료, Fable/Mythos 스타일 official-agentic SFT mix 19,536 rows 생성 완료. GLM HF Trainer LoRA smoke는 rank별 CPU 복제 로딩으로 판단되어 OOM 전에 중단했다. 다음 안전 경로는 GLM vLLM 0.23+ serving/evaluation을 먼저 확인하고, 별도 검증된 튜닝 경로를 분리하는 것이다. 자세한 내용은 [GLM-5.2-FP8 Fable 튜닝 상태](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md).
+- 2026-06-27 GLM-5.2 상태: `/home/work/.data/huggingface` 아래 FP8 다운로드 완료, Fable/Mythos 스타일 official-agentic SFT mix 19,536 rows 생성 완료. GLM vLLM `0.23.0+cu129` 8xH200 serving/probe는 성공했다. FP8 direct LoRA 학습은 fine-grained FP8 matmul backward 미지원으로 막혔으므로, 실제 학습은 `zai-org/GLM-5.2` BF16 원본을 받아 4-bit QLoRA로 진행한다. 현재 BF16 다운로드는 `tmux` 세션 `fable_glm52_bf16_download`에서 진행 중이다. 자세한 내용은 [GLM-5.2-FP8 Fable 튜닝 상태](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md), [GLM-5.2 Fable QLoRA runbook](./GLM52_FABLE_QLORA_RUNBOOK_20260627.ko.md).
 - 실행 스크립트: `scripts/run_glm52_chaser_mix_sft_20260624.sh`
 - 학습 데이터: `datasets/glm52_chaser_terminal_toolmix_20260624.jsonl` (11,416 rows)
 - 베이스 모델: `Fabliq-8B-Agent-Reasoning`
@@ -38,7 +38,7 @@
 - GLM-5.2 chaser `checkpoint-1400` vLLM sharded TB2-lite 평가는 완료. score `50.56`으로 final `51.13`보다 낮아 현 1위 `51.59`는 못 넘었다.
 - Qwen3.5-9B LoRA SFT300은 train loss `0.6287`로 완료했고 adapter 병합도 끝났다. 다만 merged checkpoint가 현재 vLLM 로드에서 VLM/text wrapper weight-key mismatch로 실패해 TB2-lite 점수는 아직 없다. 이 export 문제는 DiffusionGemma 1차 학습 뒤 처리한다.
 - 다음 DiffusionGemma run은 raw next-action이 아니라 강점 태스크로 바꾼다. Fable terminal/tool-call trace를 유지하고 structured JSON/tool-call repair를 추가하며, `scripts/build_diffusiongemma_strength_mix_20260624.py`와 `configs/diffusiongemma_26b_a4b_strength_lora_20260624.yaml`을 사용한다. 첫 retry는 step 199까지 정상 학습 후 NeMo PEFT optimizer safetensors checkpoint 버그로 실패했고, 이제 `scripts/diffusiongemma_finetune_skip_peft_optim_ckpt_20260624.py`로 adapter checkpoint는 유지하고 optimizer checkpoint만 건너뛴다.
-- 문서: [현재 실험 상태](./CURRENT_EXPERIMENT_STATUS_20260624.ko.md), [TB2 vLLM benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md), [GLM-5.2-FP8 Fable 튜닝 상태](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md), [GLM-5.2 chaser experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md), [multi-model GLM-5.2 chaser plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md), [DiffusionGemma dLLM eval plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md), [DiffusionGemma strength tasks](./DIFFUSIONGEMMA_STRENGTH_TASKS_20260624.ko.md)
+- 문서: [현재 실험 상태](./CURRENT_EXPERIMENT_STATUS_20260624.ko.md), [TB2 vLLM benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md), [GLM-5.2-FP8 Fable 튜닝 상태](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md), [GLM-5.2 Fable QLoRA runbook](./GLM52_FABLE_QLORA_RUNBOOK_20260627.ko.md), [GLM-5.2 chaser experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md), [multi-model GLM-5.2 chaser plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md), [DiffusionGemma dLLM eval plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md), [DiffusionGemma strength tasks](./DIFFUSIONGEMMA_STRENGTH_TASKS_20260624.ko.md)
 - 최신 인계 문서: [2026-06-24 experiment handoff](./EXPERIMENT_HANDOFF_20260624.ko.md)
 - Claude Code 다음 작업 인계: [2026-06-25 Claude Code next actions](./NEXT_ACTIONS_CLAUDE_CODE_20260625.ko.md)
 
@@ -166,11 +166,15 @@ TB2-lite vLLM 근거:
 - `setup_glm52_vllm_uv_20260627.sh` — Docker 없이 GLM-5.2-FP8 vLLM 0.23 환경 준비
 - `run_glm52_fp8_vllm_server_20260627.sh` — 공식 recipe에 가까운 8-way tensor-parallel GLM-5.2-FP8 vLLM server launcher
 - `probe_glm52_vllm_server_20260627.py` — 실행 중인 GLM vLLM server용 OpenAI-compatible smoke probe
+- `run_glm52_fp8_device_map_lora_20260627.sh` — single-process 8GPU `device_map=auto` GLM-5.2-FP8 LoRA smoke/장시간 실행 launcher
+- `download_glm52_bf16_20260627.sh` — `/home/work/.data/huggingface`로 `zai-org/GLM-5.2` BF16 원본을 이어받는 downloader
+- `run_glm52_bf16_qlora_device_map_20260627.sh` — 학습 가능한 GLM-5.2 BF16 -> 4-bit QLoRA launcher
 - `replay_eval_vllm.py`, `replay_metrics.py`, `summarize_replay_results.py` — local replay evaluator
 
 ### 학습 코드 (`training/`)
 - `train_lfm25_rlvr_json_sft.py` — 메인 학습 (full SFT + LoRA, FSDP)
 - `train_multifamily_chat_sft.py` — Gemma/Qwen 계열 LoRA smoke용 generic chat SFT trainer
+- `train_glm52_fp8_device_map_lora.py` — Docker 없는 8xH200 GLM-5.2 `device_map=auto` LoRA/QLoRA trainer
 - 그 외 데이터 빌더, JSONL 믹서
 
 ### 평가 코드 (`eval_scripts/`)
@@ -216,6 +220,7 @@ Apache 2.0 (LiquidAI LFM base 상속).
 - [최종 리포트](./FINAL_REPORT_20260624.ko.md)
 - [TB2 vLLM 벤치마크](./TB2_VLLM_BENCHMARK_20260624.ko.md)
 - [GLM-5.2-FP8 Fable 튜닝 상태](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md)
+- [GLM-5.2 Fable QLoRA Runbook](./GLM52_FABLE_QLORA_RUNBOOK_20260627.ko.md)
 - [GLM-5.2 추격 실험](./GLM52_CHASER_EXPERIMENT_20260624.ko.md)
 - [Multi-model GLM-5.2 추격 계획](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md)
 - [DiffusionGemma dLLM 평가 계획](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md)
