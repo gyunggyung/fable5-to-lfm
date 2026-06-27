@@ -21,12 +21,14 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
 export TOKENIZERS_PARALLELISM=false
 export NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
 
+MODEL_SLUG="${MODEL_SLUG:-GLM-5.2-Agentic-Fable5-Composer2.5-TP8-LoRA}"
 RUN_ID="${RUN_ID:-20260627_glm52_swift_megatron_tp8_lora}"
 SWIFT_ENV="${SWIFT_ENV:-/home/work/.cache/fable_distillation/venvs/glm52-swift-megatron}"
 SOURCE_JSONL="${SOURCE_JSONL:-$FABLE_DIR/datasets/official_agentic_sft_mix_20260627.jsonl}"
 SWIFT_JSONL="${SWIFT_JSONL:-$FABLE_DIR/datasets/official_agentic_sft_mix_20260627.swift_agent.jsonl}"
-OUTPUT_DIR="${OUTPUT_DIR:-/home/work/.data/harness1/models/GLM-5.2__Fable-OfficialAgentic-Swift-Megatron-TP8-LoRA-20260627}"
+OUTPUT_DIR="${OUTPUT_DIR:-/home/work/.data/harness1/models/zai-org__GLM-5.2__${MODEL_SLUG}-20260627}"
 LOG_DIR="${LOG_DIR:-$FABLE_DIR/logs/$RUN_ID}"
+MODEL_CARD="${MODEL_CARD:-$FABLE_DIR/model_cards/GLM-5.2-Agentic-Fable5-Composer2.5-TP8-LoRA-README.md}"
 
 mkdir -p "$LOG_DIR" "$(dirname "$OUTPUT_DIR")" "$MODELSCOPE_CACHE"
 
@@ -45,6 +47,7 @@ fi
 if [[ "${RUN_NOW:-0}" != "1" ]]; then
   echo "DRY-RUN. Set RUN_NOW=1 to execute."
   echo "RUN_ID=$RUN_ID"
+  echo "MODEL_SLUG=$MODEL_SLUG"
   echo "SWIFT_ENV=$SWIFT_ENV"
   echo "SWIFT_JSONL=$SWIFT_JSONL"
   echo "OUTPUT_DIR=$OUTPUT_DIR"
@@ -90,4 +93,4 @@ env -u PYTHONPATH PYTHONNOUSERSITE=1 \
     --dataset_num_proc 8 \
     --gradient_accumulation_fusion false \
     --model_author LLM-OS-Models \
-    --model_name GLM-5.2-Fable-Megatron-TP8-LoRA 2>&1 | tee "$LOG_DIR/train.log"
+    --model_name "$MODEL_SLUG" 2>&1 | tee "$LOG_DIR/train.log"
