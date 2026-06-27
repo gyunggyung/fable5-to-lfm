@@ -6,7 +6,7 @@
 
 GLM-5.2-FP8은 8xH200 vLLM serving/eval 용도로 성공했다. 하지만 FP8 checkpoint를 그대로 LoRA 학습에 쓰는 경로는 실패했다. 실패 원인은 `w8a8_block_dynamic_fp8_matmul` fine-grained FP8 kernel에 backward/autograd formula가 없기 때문이다. 따라서 학습은 `zai-org/GLM-5.2` BF16 원본을 다운로드한 뒤, 로드 시 4bit BitsAndBytes QLoRA로 양자화해서 진행한다.
 
-2026-06-27 13:59 KST 기준 BF16 원본 다운로드는 완료됐다. 첫 1-step QLoRA smoke는 venv 내부 `bitsandbytes` 누락을 고친 뒤 다시 돌렸고, 다음 단계에서 `device_map=auto`가 일부 module을 CPU/disk로 dispatch하려고 해서 BitsAndBytes guard로 중단됐다. runner 기본값은 GPU-only placement를 유도하도록 `GPU_MAX_MEMORY_GIB=140`, `CPU_MAX_MEMORY_GIB=0`으로 바꿨다.
+2026-06-27 13:59 KST 기준 BF16 원본 다운로드는 완료됐다. 첫 1-step QLoRA smoke는 venv 내부 `bitsandbytes` 누락을 고친 뒤 다시 돌렸고, 다음 단계에서 `device_map=auto`가 일부 module을 CPU/disk로 dispatch하려고 해서 BitsAndBytes guard로 중단됐다. 단순히 `GPU_MAX_MEMORY_GIB=140`, `CPU_MAX_MEMORY_GIB=0`으로 바꿔도 auto estimator가 CPU/disk dispatch를 고집했다. 그래서 runner 기본 device map을 `glm_layers`로 바꾸고, trainer가 78개 `GlmMoeDsaDecoderLayer`를 8개 GPU에 직접 분산하도록 했다.
 
 ## 공식 목표 Benchmark
 
@@ -149,8 +149,9 @@ scripts/run_glm52_bf16_qlora_device_map_20260627.sh
 | LoRA target | `q_proj,k_proj,v_proj,o_proj` |
 | LoRA rank/alpha | `64 / 128` |
 | max seq | `2048` |
+| device map | `glm_layers` manual 8GPU layer map |
 | GPU max memory | `140GiB` per visible GPU |
-| CPU max memory | `0GiB` by default, to avoid BnB CPU/disk dispatch |
+| CPU max memory | `0GiB` by default |
 | save steps | `25` |
 | output | `/home/work/.data/harness1/models/GLM-5.2__Fable-OfficialAgentic-QLoRA-20260627` |
 
@@ -186,13 +187,20 @@ ImportError: Using bitsandbytes 4-bit quantization requires bitsandbytes
 
 재현 규칙: `scripts/setup_glm52_vllm_uv_20260627.sh`가 `bitsandbytes`를 `--no-deps --force-reinstall`로 설치한다. `--ignore-installed` 또는 일반 dependency install로 실행하면 `torch`가 CUDA 13 wheel로 바뀔 수 있으므로 피한다.
 
-현재 해결 중인 smoke failure:
+해결한 smoke failure:
 
 ```text
 ValueError: Some modules are dispatched on the CPU or the disk.
 ```
 
-조치: `scripts/run_glm52_bf16_qlora_device_map_20260627.sh` 기본값을 `GPU_MAX_MEMORY_GIB=140`, `CPU_MAX_MEMORY_GIB=0`으로 바꿨다. 다음 smoke에서 GPU-only load가 되는지 확인한다.
+조치: `scripts/run_glm52_bf16_qlora_device_map_20260627.sh` 기본값을 `DEVICE_MAP=glm_layers`, `GPU_MAX_MEMORY_GIB=140`, `CPU_MAX_MEMORY_GIB=0`으로 바꿨다. `training/train_glm52_fp8_device_map_lora.py`는 `glm_layers`를 받으면 `model.embed_tokens`/`model.rotary_emb`를 GPU0, `model.layers.0..77`을 8GPU에 균등 분산, `model.norm`/`lm_head`를 마지막 GPU에 배치한다.
+
+수동 map smoke 로그에서 확인해야 할 줄:
+
+```text
+manual_device_map=embed:0 layers_per_gpu={0:10, 1:10, 2:10, 3:9, 4:10, 5:10, 6:10, 7:9} norm:7 lm_head:7
+Loading weights: ...
+```
 
 smoke 성공 후 pilot:
 

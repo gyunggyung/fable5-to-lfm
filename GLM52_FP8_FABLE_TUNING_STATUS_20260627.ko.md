@@ -43,8 +43,9 @@ GLM-5.2-FP8 다운로드와 Fable/Mythos 스타일 데이터 준비는 끝났다
 - BF16 QLoRA smoke 상태:
   - venv 내부 `bitsandbytes==0.49.2` 설치 완료. `torch 2.11.0+cu129`, `vllm 0.23.0`, `transformers 5.12.1`는 유지됨.
   - 첫 재시도 실패 원인: `device_map=auto`가 일부 module을 CPU/disk로 보내려고 하면서 BitsAndBytes guard 발생.
-  - 조치: `scripts/run_glm52_bf16_qlora_device_map_20260627.sh` 기본값을 GPU-only placement로 변경 (`GPU_MAX_MEMORY_GIB=140`, `CPU_MAX_MEMORY_GIB=0`).
-  - 다음 작업: 1-step smoke 재실행 후 통과하면 25-step pilot.
+  - `GPU_MAX_MEMORY_GIB=140`, `CPU_MAX_MEMORY_GIB=0`만으로는 auto estimator가 계속 CPU/disk dispatch를 선택했다.
+  - 조치: `scripts/run_glm52_bf16_qlora_device_map_20260627.sh` 기본값을 `DEVICE_MAP=glm_layers`로 바꾸고, trainer에 GLM 78-layer manual device map을 추가했다.
+  - 다음 작업: manual map 1-step smoke를 끝까지 확인하고, 통과하면 25-step pilot.
 
 ## 현재 상태
 

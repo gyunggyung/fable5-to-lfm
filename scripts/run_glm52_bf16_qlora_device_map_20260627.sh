@@ -57,6 +57,7 @@ LORA_RANK="${LORA_RANK:-64}"
 LORA_ALPHA="${LORA_ALPHA:-128}"
 LORA_DROPOUT="${LORA_DROPOUT:-0.02}"
 TARGET_MODULES="${TARGET_MODULES:-q_proj,k_proj,v_proj,o_proj}"
+DEVICE_MAP="${DEVICE_MAP:-glm_layers}"
 # Keep the 4-bit base on the 8x H200s. If CPU memory is exposed to
 # Transformers' auto device map, BitsAndBytes can dispatch some modules to CPU
 # and abort before loading the model.
@@ -121,6 +122,7 @@ train_cmd=(
   --lora-dropout "$LORA_DROPOUT"
   --target-modules "$TARGET_MODULES"
   --torch-dtype bfloat16
+  --device-map "$DEVICE_MAP"
   --gpu-max-memory-gib "$GPU_MAX_MEMORY_GIB"
   --cpu-max-memory-gib "$CPU_MAX_MEMORY_GIB"
   --load-in-4bit
@@ -134,9 +136,9 @@ printf 'run_id=%s\nmodel=%s\noutput=%s\ntrain_jsonl=%s\nlog_dir=%s\n' \
   "$RUN_ID" "$MODEL_PATH" "$OUTPUT_DIR" "$TRAIN_JSONL" "$LOG_DIR"
 printf 'train_env=%s\nsite_packages=%s\ncuda_runtime_lib_paths=%s\n' \
   "$TRAIN_ENV" "$SITE_PACKAGES" "$CUDA_RUNTIME_LIB_PATHS"
-printf 'gpus=%s max_seq=%s steps=%s lr=%s lora_r=%s gpu_max_memory_gib=%s qlora=%s/%s double_quant=%s\n' \
+printf 'gpus=%s max_seq=%s steps=%s lr=%s lora_r=%s device_map=%s gpu_max_memory_gib=%s qlora=%s/%s double_quant=%s\n' \
   "$TRAIN_GPUS" "$MAX_SEQ_LENGTH" "$MAX_STEPS" "$LEARNING_RATE" "$LORA_RANK" \
-  "$GPU_MAX_MEMORY_GIB" "$BNB_4BIT_QUANT_TYPE" "$BNB_4BIT_COMPUTE_DTYPE" "$BNB_4BIT_USE_DOUBLE_QUANT"
+  "$DEVICE_MAP" "$GPU_MAX_MEMORY_GIB" "$BNB_4BIT_QUANT_TYPE" "$BNB_4BIT_COMPUTE_DTYPE" "$BNB_4BIT_USE_DOUBLE_QUANT"
 printf 'train command:\n  '
 printf '%q ' "${train_cmd[@]}"
 printf '\n'

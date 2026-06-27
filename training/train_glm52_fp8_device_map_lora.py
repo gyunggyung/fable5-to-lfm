@@ -115,6 +115,28 @@ def build_max_memory(args: argparse.Namespace) -> dict[int | str, str]:
     return max_memory
 
 
+def build_device_map(args: argparse.Namespace, config: Any) -> str | dict[str, int]:
+    if args.device_map not in {"glm_layers", "balanced_layers"}:
+        return args.device_map
+    gpu_count = visible_gpu_count()
+    if gpu_count <= 0:
+        raise RuntimeError(f"device_map={args.device_map} requires CUDA GPUs")
+    num_layers = int(getattr(config, "num_hidden_layers", 0) or 0)
+    if num_layers <= 0:
+        raise RuntimeError("cannot build GLM layer device map without num_hidden_layers")
+
+    device_map: dict[str, int] = {
+        "model.embed_tokens": 0,
+        "model.rotary_emb": 0,
+    }
+    for layer_idx in range(num_layers):
+        device_map[f"model.layers.{layer_idx}"] = min((layer_idx * gpu_count) // num_layers, gpu_count - 1)
+    last_device = gpu_count - 1
+    device_map["model.norm"] = last_device
+    device_map["lm_head"] = last_device
+    return device_map
+
+
 def build_quantization_config(args: argparse.Namespace) -> BitsAndBytesConfig | None:
     if not args.load_in_4bit:
         return None
@@ -303,14 +325,15 @@ def main() -> None:
 
     quantization_config = build_quantization_config(args)
     quantization_label = "4bit QLoRA" if quantization_config is not None else "native"
-    log(f"loading GLM base with device_map={args.device_map} quantization={quantization_label}")
     config = patch_config_compat(AutoConfig.from_pretrained(args.model_path, trust_remote_code=True))
+    device_map = build_device_map(args, config)
+    log(f"loading GLM base with device_map={args.device_map} quantization={quantization_label}")
     kwargs: dict[str, Any] = {
         "trust_remote_code": True,
         "config": config,
         "dtype": resolve_torch_dtype(args.torch_dtype),
         "low_cpu_mem_usage": True,
-        "device_map": args.device_map,
+        "device_map": device_map,
         "max_memory": build_max_memory(args),
     }
     if quantization_config is not None:
@@ -321,6 +344,17 @@ def main() -> None:
         Path(args.offload_folder).mkdir(parents=True, exist_ok=True)
         kwargs["offload_folder"] = args.offload_folder
     log(f"max_memory={kwargs['max_memory']}")
+    if isinstance(device_map, dict):
+        layer_devices = [
+            device_map[f"model.layers.{index}"] for index in range(int(getattr(config, "num_hidden_layers", 0) or 0))
+        ]
+        log(
+            "manual_device_map="
+            f"embed:{device_map['model.embed_tokens']} "
+            f"layers_per_gpu={{"
+            + ", ".join(f"{gpu}:{layer_devices.count(gpu)}" for gpu in sorted(set(layer_devices)))
+            + f"}} norm:{device_map['model.norm']} lm_head:{device_map['lm_head']}"
+        )
     model = AutoModelForCausalLM.from_pretrained(args.model_path, **kwargs)
     model.config.use_cache = False
     if args.load_in_4bit:
