@@ -32,6 +32,8 @@ GLM52_MODEL="${GLM52_MODEL:-/home/work/.data/huggingface/hub/models--zai-org--GL
 TORCH_DTYPE="${TORCH_DTYPE:-bfloat16}"
 QUANT_METHOD="${QUANT_METHOD:-fp8}"
 QUANT_BITS="${QUANT_BITS:-float8}"
+FP8_FORMAT="${FP8_FORMAT:-hybrid}"
+FP8_PARAM_GATHER="${FP8_PARAM_GATHER:-true}"
 SOURCE_JSONL="${SOURCE_JSONL:-$FABLE_DIR/datasets/official_agentic_sft_mix_20260627.jsonl}"
 SWIFT_JSONL="${SWIFT_JSONL:-$FABLE_DIR/datasets/official_agentic_sft_mix_20260627.swift_agent.jsonl}"
 OUTPUT_DIR="${OUTPUT_DIR:-/home/work/.data/harness1/models/zai-org__GLM-5.2__${MODEL_SLUG}-20260627}"
@@ -78,6 +80,8 @@ env -u PYTHONPATH PYTHONNOUSERSITE=1 \
     --torch_dtype "$TORCH_DTYPE" \
     --quant_method "$QUANT_METHOD" \
     --quant_bits "$QUANT_BITS" \
+    --fp8_format "$FP8_FORMAT" \
+    --fp8_param_gather "$FP8_PARAM_GATHER" \
     --save_safetensors true \
     --merge_lora false \
     --dataset "$SWIFT_JSONL" \
