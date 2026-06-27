@@ -33,6 +33,9 @@ env -u PIP_CONSTRAINT -u PYTHONPATH PYTHONNOUSERSITE=1 "$ENV_DIR/bin/python" -m 
   --no-build-isolation \
   "axolotl[deepspeed] @ git+https://github.com/axolotl-ai-cloud/axolotl.git"
 
+env -u PIP_CONSTRAINT -u PYTHONPATH PYTHONNOUSERSITE=1 "$ENV_DIR/bin/python" \
+  scripts/patch_axolotl_moe_8bit_flatten_20260627.py "$ENV_DIR"
+
 env -u PIP_CONSTRAINT -u PYTHONPATH PYTHONNOUSERSITE=1 "$ENV_DIR/bin/python" - <<'PY'
 import torch
 print("torch", torch.__version__, "cuda", torch.version.cuda, "gpus", torch.cuda.device_count())

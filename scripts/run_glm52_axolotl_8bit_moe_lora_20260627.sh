@@ -18,6 +18,7 @@ export HF_XET_HIGH_PERFORMANCE="${HF_XET_HIGH_PERFORMANCE:-1}"
 export TOKENIZERS_PARALLELISM=false
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
 export ACCELERATE_USE_FSDP=1
+export AXOLOTL_MOE_8BIT_QUANT_MAX_ELEMS="${AXOLOTL_MOE_8BIT_QUANT_MAX_ELEMS:-67108864}"
 
 RUN_ID="${RUN_ID:-20260627_glm52_axolotl_8bit_moe_lora}"
 AXOLOTL_ENV="${AXOLOTL_ENV:-/home/work/.cache/fable_distillation/venvs/glm52-axolotl-8bit-moe}"
@@ -48,6 +49,9 @@ if [[ ! -x "$AXOLOTL_ENV/bin/axolotl" ]]; then
   echo "run scripts/setup_glm52_axolotl_env_20260627.sh first" >&2
   exit 2
 fi
+
+env -u PYTHONPATH PYTHONNOUSERSITE=1 "$AXOLOTL_ENV/bin/python" \
+  scripts/patch_axolotl_moe_8bit_flatten_20260627.py "$AXOLOTL_ENV"
 
 env -u PYTHONPATH PYTHONNOUSERSITE=1 \
   HF_HOME="$HF_HOME" \
