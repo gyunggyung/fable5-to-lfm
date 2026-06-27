@@ -24,7 +24,7 @@ while true; do
   sleep "$SLEEP_SECONDS"
 done
 
-AXOLOTL_ENV="${AXOLOTL_ENV:-$FABLE_DIR/.venvs/glm52-axolotl-8bit-moe}"
+AXOLOTL_ENV="${AXOLOTL_ENV:-/home/work/.cache/fable_distillation/venvs/glm52-axolotl-8bit-moe}"
 while [[ ! -x "$AXOLOTL_ENV/bin/accelerate" || ! -x "$AXOLOTL_ENV/bin/axolotl" ]]; do
   date -u "+[%Y-%m-%dT%H:%M:%SZ] Axolotl env not ready at $AXOLOTL_ENV; sleeping" | tee -a "$LOG_DIR/watch.log"
   tail -n 20 logs/20260627_glm52_axolotl_setup/setup.log 2>/dev/null | tee -a "$LOG_DIR/watch.log" || true

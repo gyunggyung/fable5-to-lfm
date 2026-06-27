@@ -20,7 +20,7 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
 export ACCELERATE_USE_FSDP=1
 
 RUN_ID="${RUN_ID:-20260627_glm52_axolotl_8bit_moe_lora}"
-AXOLOTL_ENV="${AXOLOTL_ENV:-$FABLE_DIR/.venvs/glm52-axolotl-8bit-moe}"
+AXOLOTL_ENV="${AXOLOTL_ENV:-/home/work/.cache/fable_distillation/venvs/glm52-axolotl-8bit-moe}"
 CONFIG_PATH="${CONFIG_PATH:-$FABLE_DIR/configs/axolotl_glm52_8bit_moe_lora_20260627.yml}"
 SOURCE_JSONL="${SOURCE_JSONL:-$FABLE_DIR/datasets/official_agentic_sft_mix_20260627.jsonl}"
 AXOLOTL_JSONL="${AXOLOTL_JSONL:-$FABLE_DIR/datasets/official_agentic_sft_mix_20260627.axolotl_chatml.jsonl}"

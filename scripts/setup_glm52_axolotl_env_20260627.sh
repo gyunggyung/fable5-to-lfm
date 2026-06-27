@@ -3,14 +3,14 @@ set -euo pipefail
 
 ROOT_DIR="${ROOT_DIR:-/home/work/.projects/LLM-OS-Models/Terminal}"
 FABLE_DIR="$ROOT_DIR/fable_distillation"
-ENV_DIR="${ENV_DIR:-$FABLE_DIR/.venvs/glm52-axolotl-8bit-moe}"
+ENV_DIR="${ENV_DIR:-/home/work/.cache/fable_distillation/venvs/glm52-axolotl-8bit-moe}"
 UV_BIN="${UV_BIN:-/home/work/.local/bin/uv}"
 
 export HF_HOME="${HF_HOME:-/home/work/.data/huggingface}"
 export HF_HUB_CACHE="${HF_HUB_CACHE:-$HF_HOME/hub}"
 export HF_XET_HIGH_PERFORMANCE="${HF_XET_HIGH_PERFORMANCE:-1}"
 
-mkdir -p "$FABLE_DIR/.venvs" "$HF_HUB_CACHE"
+mkdir -p "$(dirname "$ENV_DIR")" "$HF_HUB_CACHE"
 cd "$FABLE_DIR"
 
 if [[ ! -x "$UV_BIN" ]]; then
