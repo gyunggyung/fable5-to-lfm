@@ -35,6 +35,7 @@ export BITSANDBYTES_NOWELCOME="${BITSANDBYTES_NOWELCOME:-1}"
 mkdir -p "$HF_HUB_CACHE"
 
 RUN_NOW="${RUN_NOW:-0}"
+ALLOW_EXPERIMENTAL_GLM52_BF16_QLORA="${ALLOW_EXPERIMENTAL_GLM52_BF16_QLORA:-0}"
 RUN_ID="${RUN_ID:-20260627_glm52_bf16_fable_official_agentic_qlora}"
 TRAIN_ENV="${TRAIN_ENV:-$FABLE_DIR/.venvs/glm52-vllm-cu129-release-driver570}"
 MODEL_PATH="${MODEL_PATH:-zai-org/GLM-5.2}"
@@ -146,6 +147,21 @@ printf '\n'
 if [[ "$RUN_NOW" != "1" ]]; then
   echo "DRY-RUN. Set RUN_NOW=1 to execute."
   exit 0
+fi
+
+if [[ "$ALLOW_EXPERIMENTAL_GLM52_BF16_QLORA" != "1" ]]; then
+  cat >&2 <<'EOF'
+GLM-5.2 BF16 -> BitsAndBytes QLoRA is disabled by default.
+
+2026-06-27 local testing reached the manual device-map load path, then OOMed
+at Loading weights 22% on 8xH200. Metadata inspection shows 1403.19GiB BF16
+total and 1368.00GiB in raw MoE expert weights, which BitsAndBytes does not
+reduce like normal Linear modules in this model class.
+
+Use GLM-5.2-FP8 for vLLM eval/teacher runs, or set
+ALLOW_EXPERIMENTAL_GLM52_BF16_QLORA=1 only to intentionally reproduce the OOM.
+EOF
+  exit 3
 fi
 
 if [[ ! -x "$TRAIN_ENV/bin/python" ]]; then

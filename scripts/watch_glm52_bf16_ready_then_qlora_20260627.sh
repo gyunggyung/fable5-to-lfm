@@ -2,8 +2,9 @@
 set -euo pipefail
 
 # Wait until the BF16 GLM-5.2 snapshot is fully present in the HF cache, then
-# run QLoRA smoke -> pilot -> optional long run. This keeps the GPU idle until
-# the 1.5T download is complete, then starts the trainable path immediately.
+# optionally run QLoRA smoke -> pilot -> optional long run. This path is guarded
+# because Transformers+BitsAndBytes does not quantize GLM's raw MoE expert
+# parameters enough for local 8xH200 QLoRA in current testing.
 
 ROOT_DIR="${ROOT_DIR:-/home/work/.projects/LLM-OS-Models/Terminal}"
 FABLE_DIR="$ROOT_DIR/fable_distillation"
@@ -23,7 +24,8 @@ export HF_XET_HIGH_PERFORMANCE="${HF_XET_HIGH_PERFORMANCE:-1}"
 WATCH_ENV="${WATCH_ENV:-$FABLE_DIR/.venvs/glm52-vllm-cu129-release-driver570}"
 MODEL_ID="${MODEL_ID:-zai-org/GLM-5.2}"
 SLEEP_SECONDS="${SLEEP_SECONDS:-120}"
-START_LONG_AFTER_PILOT="${START_LONG_AFTER_PILOT:-1}"
+ALLOW_EXPERIMENTAL_GLM52_BF16_QLORA="${ALLOW_EXPERIMENTAL_GLM52_BF16_QLORA:-0}"
+START_LONG_AFTER_PILOT="${START_LONG_AFTER_PILOT:-0}"
 LOG_DIR="${LOG_DIR:-$FABLE_DIR/logs/20260627_glm52_bf16_ready_then_qlora}"
 mkdir -p "$LOG_DIR"
 
@@ -47,6 +49,16 @@ while true; do
   tail -n 5 "$FABLE_DIR/logs/20260627_glm52_bf16_download/download.log" 2>/dev/null | tee -a "$LOG_DIR/watch.log" || true
   sleep "$SLEEP_SECONDS"
 done
+
+if [[ "$ALLOW_EXPERIMENTAL_GLM52_BF16_QLORA" != "1" ]]; then
+  {
+    echo "snapshot ready, but GLM-5.2 BF16 QLoRA auto-run is disabled."
+    echo "Reason: local Transformers+BitsAndBytes testing OOMed because GLM MoE expert weights are raw Parameters."
+    echo "Set ALLOW_EXPERIMENTAL_GLM52_BF16_QLORA=1 only if intentionally rerunning the risky smoke."
+    echo "Inspect memory with: python scripts/inspect_glm52_bf16_qlora_memory_20260627.py"
+  } | tee -a "$LOG_DIR/watch.log"
+  exit 0
+fi
 
 echo "snapshot ready; starting 1-step smoke" | tee -a "$LOG_DIR/watch.log"
 RUN_NOW=1 \

@@ -45,7 +45,10 @@ GLM-5.2-FP8 다운로드와 Fable/Mythos 스타일 데이터 준비는 끝났다
   - 첫 재시도 실패 원인: `device_map=auto`가 일부 module을 CPU/disk로 보내려고 하면서 BitsAndBytes guard 발생.
   - `GPU_MAX_MEMORY_GIB=140`, `CPU_MAX_MEMORY_GIB=0`만으로는 auto estimator가 계속 CPU/disk dispatch를 선택했다.
   - 조치: `scripts/run_glm52_bf16_qlora_device_map_20260627.sh` 기본값을 `DEVICE_MAP=glm_layers`로 바꾸고, trainer에 GLM 78-layer manual device map을 추가했다.
-  - 다음 작업: manual map 1-step smoke를 끝까지 확인하고, 통과하면 25-step pilot.
+  - manual map 재시도 결과: guard는 넘겼지만 `Loading weights` 22%, `294/1344`, 약 8분 52초 지점에서 GPU1 OOM.
+  - metadata inspector 결과: BF16 총량 `1403.19GiB`, raw MoE expert weight `1368.00GiB`, tensors `58,368`.
+  - 판단: 로컬 Transformers+BitsAndBytes GLM-5.2 BF16 QLoRA는 현재 환경에서 보류한다. GLM은 FP8 vLLM eval/teacher로 쓰고, Fable-style 튜닝은 trainable base로 돌린다.
+  - safety guard: `scripts/run_glm52_bf16_qlora_device_map_20260627.sh`와 watcher는 기본 실행을 막는다. 재현 목적이면 `ALLOW_EXPERIMENTAL_GLM52_BF16_QLORA=1`을 명시한다.
 
 ## 현재 상태
 
@@ -104,6 +107,7 @@ datasets/official_agentic_sft_mix_20260627.meta.json
 - `scripts/run_glm52_bf16_qlora_device_map_20260627.sh`
 - `scripts/check_glm52_bf16_snapshot_ready_20260627.py`
 - `scripts/watch_glm52_bf16_ready_then_qlora_20260627.sh`
+- `scripts/inspect_glm52_bf16_qlora_memory_20260627.py`
 - `training/train_multifamily_chat_sft.py`
 - `training/train_glm52_fp8_device_map_lora.py`
 
@@ -175,6 +179,7 @@ RuntimeError: Trying to backward through _finegrained_fp8_cuda_...w8a8_block_dyn
 - GLM-5.2 benchmark 섹션: https://huggingface.co/zai-org/GLM-5.2#benchmark
 - vLLM GLM-5.2 recipe: https://recipes.vllm.ai/zai-org/GLM-5.2
 - GLM-5.2 blog: https://huggingface.co/blog/zai-org/glm-52-blog
+- Fireworks GLM-5.2-FP8 hosted fine-tuning page: https://fireworks.ai/models/fireworks/glm-5p2-fp8
 
 공식/recipe에서 확인한 기준:
 
@@ -279,7 +284,7 @@ tmux new-session -d -s fable_glm52_bf16_ready_then_qlora \
   "cd /home/work/.projects/LLM-OS-Models/Terminal/fable_distillation && bash scripts/watch_glm52_bf16_ready_then_qlora_20260627.sh"
 ```
 
-주의: watcher는 이미 한번 snapshot을 감지했고 smoke 실패와 함께 종료됐다. 지금은 `run_glm52_bf16_qlora_device_map_20260627.sh`를 직접 재실행해 다음 load failure를 보는 것이 더 빠르다.
+주의: watcher는 이미 한번 snapshot을 감지했고 smoke 실패와 함께 종료됐다. 이후 manual map 재시도에서도 22% load에서 GPU1 OOM이 확인됐으므로, 기본 자동 재실행은 막아두고 재현이 필요할 때만 명시적으로 실행한다.
 
 다운로드 재시작이 필요하면:
 
