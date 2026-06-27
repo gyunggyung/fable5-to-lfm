@@ -10,17 +10,27 @@ GLM-5.2-FP8은 8xH200 vLLM serving/eval 용도로 성공했다. 하지만 FP8 ch
 
 업데이트: 로컬 Transformers+BitsAndBytes BF16 QLoRA 경로는 보류한다. GLM MoE expert weight가 `Linear` module이 아니라 raw `Parameter`라 대부분을 4bit로 줄이지 못했고, inspector 기준 BF16 총량은 `1403.19GiB`, raw MoE expert weight는 `1368.00GiB`다. 대신 Axolotl의 GLM/MoE 전용 경로를 사용한다. 현재 유효 경로는 `load_in_8bit: true`, `quantize_moe_experts: true`, FSDP2, LoRA target modules `q_proj,k_proj,v_proj,o_proj`, expert target parameters `mlp.experts.gate_up_proj`, `mlp.experts.down_proj`이다.
 
-2026-06-27 현재 active run:
+2026-06-27 Axolotl 8-bit run:
 
 ```text
-tmux: fable_glm52_axolotl_8bit_chunk_patch2_20260627
+tmux: fable_glm52_axolotl_8bit_chunk_patch2_20260627 (exited)
 run_id: 20260627_glm52_axolotl_8bit_moe_lora_chunk_patch2
 log: logs/20260627_glm52_axolotl_8bit_moe_lora_chunk_patch2/train.log
 config: configs/axolotl_glm52_8bit_moe_lora_20260627.yml
 output: /home/work/.data/harness1/models/GLM-5.2__Fable-OfficialAgentic-Axolotl-8bit-MoE-LoRA-20260627
 ```
 
-첫 unchunked Axolotl 8-bit run은 weight loading 중 `axolotl.monkeypatch.moe_quant` -> `torch.cuda.empty_cache()`에서 CUDA illegal memory access로 실패했다. 원인은 GLM fused expert tensor가 매우 큰 3D tensor인데, 8-bit quantization이 이를 한 번에 `bitsandbytes.int8_vectorwise_quant`로 넘기는 것이다. `scripts/patch_axolotl_moe_8bit_flatten_20260627.py`가 설치된 Axolotl의 `replace_parameter_8bit`을 패치해 3D tensor를 2D row chunks로 나눠 quantize한다. 이 패치 후 active run은 이전 실패 지점인 `54/1344`를 넘어 weight loading을 계속 진행 중이며, 8xH200 VRAM도 약 96-98GiB/GPU까지 사용한다.
+첫 unchunked Axolotl 8-bit run은 weight loading 중 `axolotl.monkeypatch.moe_quant` -> `torch.cuda.empty_cache()`에서 CUDA illegal memory access로 실패했다. 원인은 GLM fused expert tensor가 매우 큰 3D tensor인데, 8-bit quantization이 이를 한 번에 `bitsandbytes.int8_vectorwise_quant`로 넘기는 것이다. `scripts/patch_axolotl_moe_8bit_flatten_20260627.py`가 설치된 Axolotl의 `replace_parameter_8bit`을 패치해 3D tensor를 2D row chunks로 나눠 quantize한다. 이 패치 후 run은 이전 실패 지점인 `54/1344`를 넘었지만, `278/1344`, `21%`에서 GPU OOM으로 실패했다. OOM 시점은 GPU당 약 140GiB 사용이었다.
+
+2026-06-27 Axolotl 4-bit fallback:
+
+```text
+config: configs/axolotl_glm52_4bit_moe_qlora_20260627.yml
+run_id: 20260627_glm52_axolotl_4bit_moe_qlora_fallback1
+run_id: 20260627_glm52_axolotl_4bit_moe_qlora_flatten_patch2
+```
+
+4-bit fallback도 train step까지 가지 못했다. 원래 4-bit path는 `40/1344`에서 bitsandbytes CUDA `invalid configuration argument at line 54 in file /src/csrc/ops.cu`로 실패했다. 이후 3D expert tensor를 2D로 flatten하고 `QuantState.shape`를 원래 3D shape로 복구하는 patch를 추가했지만 같은 위치와 같은 오류로 실패했다. 따라서 현재 로컬 Axolotl+bitsandbytes 경로로는 GLM-5.2 adapter 학습 완료물이 없다.
 
 ## 공식 목표 Benchmark
 

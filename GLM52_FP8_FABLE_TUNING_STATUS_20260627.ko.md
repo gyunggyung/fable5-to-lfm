@@ -49,16 +49,18 @@ GLM-5.2-FP8 다운로드와 Fable/Mythos 스타일 데이터 준비는 끝났다
   - metadata inspector 결과: BF16 총량 `1403.19GiB`, raw MoE expert weight `1368.00GiB`, tensors `58,368`.
   - 판단: 로컬 Transformers+BitsAndBytes GLM-5.2 BF16 QLoRA는 현재 환경에서 보류한다. GLM은 FP8 vLLM eval/teacher로 쓰고, Fable-style 튜닝은 trainable base로 돌린다.
   - safety guard: `scripts/run_glm52_bf16_qlora_device_map_20260627.sh`와 watcher는 기본 실행을 막는다. 재현 목적이면 `ALLOW_EXPERIMENTAL_GLM52_BF16_QLORA=1`을 명시한다.
-- Axolotl 8-bit MoE LoRA 경로 추가:
+- Axolotl 8-bit/4-bit MoE LoRA 경로 결과:
   - env: `/home/work/.cache/fable_distillation/venvs/glm52-axolotl-8bit-moe`
   - config: `configs/axolotl_glm52_8bit_moe_lora_20260627.yml`
   - key settings: `load_in_8bit: true`, `quantize_moe_experts: true`, `fsdp_version: 2`, `optimizer: adamw_torch_8bit`, `sequence_len: 2048`, `max_steps: 200`
   - data: `datasets/official_agentic_sft_mix_20260627.axolotl_chatml.jsonl`, 19,536 rows converted to completion-style ChatML text
-  - patch: `scripts/patch_axolotl_moe_8bit_flatten_20260627.py` chunks GLM fused 3D expert tensors before `bitsandbytes` int8 quantization.
-  - active tmux: `fable_glm52_axolotl_8bit_chunk_patch2_20260627`
-  - active log: `logs/20260627_glm52_axolotl_8bit_moe_lora_chunk_patch2/train.log`
-  - output: `/home/work/.data/harness1/models/GLM-5.2__Fable-OfficialAgentic-Axolotl-8bit-MoE-LoRA-20260627`
-  - status: previous unchunked CUDA illegal memory access was bypassed; active run is still in weight loading and has reached roughly 14%+ with about 96-98GiB VRAM per GPU.
+  - 8-bit patch: `scripts/patch_axolotl_moe_8bit_flatten_20260627.py` chunks GLM fused 3D expert tensors before `bitsandbytes` int8 quantization.
+  - 8-bit log: `logs/20260627_glm52_axolotl_8bit_moe_lora_chunk_patch2/train.log`
+  - 8-bit result: unchunked CUDA illegal memory access was bypassed, but chunked int8 loading failed at `278/1344`, `21%`, with GPU OOM at about 140GiB/GPU.
+  - 4-bit config: `configs/axolotl_glm52_4bit_moe_qlora_20260627.yml`
+  - 4-bit logs: `logs/20260627_glm52_axolotl_4bit_moe_qlora_fallback1/train.log`, `logs/20260627_glm52_axolotl_4bit_moe_qlora_flatten_patch2/train.log`
+  - 4-bit result: raw and 3D-flatten patched runs both failed at `40/1344` with bitsandbytes CUDA `invalid configuration argument at line 54 in file /src/csrc/ops.cu`.
+  - status: no completed GLM-5.2 Fable adapter checkpoint exists from local Axolotl/bitsandbytes runs.
 
 ## 현재 상태
 
@@ -67,8 +69,8 @@ GLM-5.2-FP8 다운로드와 Fable/Mythos 스타일 데이터 준비는 끝났다
 - GLM snapshot: `/home/work/.data/huggingface/hub/models--zai-org--GLM-5.2-FP8/snapshots/70311cfa0158cce7dd2cf5d2e04f68e3fdc3efc1`
 - GLM cache size: 약 `707G`
 - BF16 GLM-5.2 snapshot: safetensors `282` shards, snapshot `f2263102df303b2faa54a6861a29d1770ce846c0`
-- GPU 상태: Axolotl GLM-5.2 8-bit MoE LoRA active run이 8xH200에서 weight loading/on-the-fly int8 quantization 중이다.
-- Git 상태: 로컬 `main`은 `origin/main`보다 여러 커밋 앞섬. 최신 GLM Axolotl chunk patch 커밋은 `8b9ab73`.
+- GPU 상태: 현재 GLM Axolotl 학습 프로세스 없음. GPU 메모리는 1MiB 수준으로 회수됨.
+- Git 상태: 로컬 `main`은 `origin/main`보다 여러 커밋 앞섬.
 - Push 상태: HTTPS GitHub credential 없음으로 실패. 에러는 `fatal: could not read Username for 'https://github.com': No such device or address`.
 
 ## 이미 준비한 데이터
