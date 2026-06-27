@@ -26,7 +26,7 @@ Main takeaway: **ToolBench foundation + Fable terminal traces beat raw-base Mega
 
 Current 2026-06-24 experiment status:
 
-- 2026-06-27 GLM-5.2 status: FP8 download completed under `/home/work/.data/huggingface`, Fable/Mythos-style official-agentic SFT mix built with 19,536 rows, and GLM vLLM `0.23.0+cu129` serving/probe succeeded on 8xH200. FP8 direct LoRA training is blocked by the fine-grained FP8 matmul backward path, so trainable GLM work has moved to `zai-org/GLM-5.2` BF16 -> 4-bit QLoRA. BF16 download is running in `tmux` session `fable_glm52_bf16_download`. See [GLM-5.2-FP8 Fable tuning status](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md) and [GLM-5.2 Fable QLoRA runbook](./GLM52_FABLE_QLORA_RUNBOOK_20260627.ko.md).
+- 2026-06-27 GLM-5.2 status: FP8 download completed under `/home/work/.data/huggingface`, Fable/Mythos-style official-agentic SFT mix built with 19,536 rows, and GLM vLLM `0.23.0+cu129` serving/probe succeeded on 8xH200. FP8 direct LoRA training is blocked by the fine-grained FP8 matmul backward path, so trainable GLM work has moved to `zai-org/GLM-5.2` BF16 -> 4-bit QLoRA. BF16 download is complete at snapshot `f2263102df303b2faa54a6861a29d1770ce846c0`; the first QLoRA smoke exposed a BitsAndBytes CPU/disk dispatch guard, so the runner now defaults to GPU-only auto placement (`GPU_MAX_MEMORY_GIB=140`, `CPU_MAX_MEMORY_GIB=0`). See [GLM-5.2-FP8 Fable tuning status](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md) and [GLM-5.2 Fable QLoRA runbook](./GLM52_FABLE_QLORA_RUNBOOK_20260627.ko.md).
 - Running script: `scripts/run_glm52_chaser_mix_sft_20260624.sh`
 - Training data: `datasets/glm52_chaser_terminal_toolmix_20260624.jsonl` (11,416 rows)
 - Base model: `Fabliq-8B-Agent-Reasoning`

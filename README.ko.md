@@ -26,7 +26,7 @@
 
 현재 2026-06-24 실험 상태:
 
-- 2026-06-27 GLM-5.2 상태: `/home/work/.data/huggingface` 아래 FP8 다운로드 완료, Fable/Mythos 스타일 official-agentic SFT mix 19,536 rows 생성 완료. GLM vLLM `0.23.0+cu129` 8xH200 serving/probe는 성공했다. FP8 direct LoRA 학습은 fine-grained FP8 matmul backward 미지원으로 막혔으므로, 실제 학습은 `zai-org/GLM-5.2` BF16 원본을 받아 4-bit QLoRA로 진행한다. 현재 BF16 다운로드는 `tmux` 세션 `fable_glm52_bf16_download`에서 진행 중이다. 자세한 내용은 [GLM-5.2-FP8 Fable 튜닝 상태](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md), [GLM-5.2 Fable QLoRA runbook](./GLM52_FABLE_QLORA_RUNBOOK_20260627.ko.md).
+- 2026-06-27 GLM-5.2 상태: `/home/work/.data/huggingface` 아래 FP8 다운로드 완료, Fable/Mythos 스타일 official-agentic SFT mix 19,536 rows 생성 완료. GLM vLLM `0.23.0+cu129` 8xH200 serving/probe는 성공했다. FP8 direct LoRA 학습은 fine-grained FP8 matmul backward 미지원으로 막혔으므로, 실제 학습은 `zai-org/GLM-5.2` BF16 원본을 받아 4-bit QLoRA로 진행한다. BF16 다운로드는 snapshot `f2263102df303b2faa54a6861a29d1770ce846c0`까지 완료했고, 첫 QLoRA smoke에서 BitsAndBytes CPU/disk dispatch guard가 떠서 runner 기본값을 GPU-only auto placement(`GPU_MAX_MEMORY_GIB=140`, `CPU_MAX_MEMORY_GIB=0`)로 바꿨다. 자세한 내용은 [GLM-5.2-FP8 Fable 튜닝 상태](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md), [GLM-5.2 Fable QLoRA runbook](./GLM52_FABLE_QLORA_RUNBOOK_20260627.ko.md).
 - 실행 스크립트: `scripts/run_glm52_chaser_mix_sft_20260624.sh`
 - 학습 데이터: `datasets/glm52_chaser_terminal_toolmix_20260624.jsonl` (11,416 rows)
 - 베이스 모델: `Fabliq-8B-Agent-Reasoning`

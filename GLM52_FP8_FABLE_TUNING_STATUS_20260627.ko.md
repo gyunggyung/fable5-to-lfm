@@ -1,12 +1,12 @@
 # GLM-5.2-FP8 Fable 스타일 튜닝/평가 상태 (2026-06-27)
 
-작성 시각: 2026-06-27 04:08 UTC / 2026-06-27 13:08 KST
+작성 시각: 2026-06-27 04:59 UTC / 2026-06-27 13:59 KST
 
 ## 한줄 결론
 
 GLM-5.2-FP8 다운로드와 Fable/Mythos 스타일 데이터 준비는 끝났다. vLLM `0.23.0+cu129` 서버도 8xH200에서 정상 기동했고 OpenAI-compatible probe 3개가 통과했다. 그러나 FP8 checkpoint 직접 LoRA 학습은 fine-grained FP8 matmul backward 미지원으로 실패했다. 실제 학습 경로는 `zai-org/GLM-5.2` BF16 원본을 4bit BitsAndBytes QLoRA로 로드하는 방식으로 전환했다.
 
-## 최신 업데이트 (2026-06-27 13:08 KST)
+## 최신 업데이트 (2026-06-27 13:59 KST)
 
 - GLM-5.2-FP8 vLLM server 성공:
   - env: `.venvs/glm52-vllm-cu129-release-driver570`
@@ -28,18 +28,23 @@ GLM-5.2-FP8 다운로드와 Fable/Mythos 스타일 데이터 준비는 끝났다
   - BF16 download runner: `scripts/download_glm52_bf16_20260627.sh`
   - BF16 ready watcher: `scripts/watch_glm52_bf16_ready_then_qlora_20260627.sh`
   - 기본 env: `.venvs/glm52-vllm-cu129-release-driver570`
-  - 핵심 설정: `HF_DEACTIVATE_ASYNC_LOAD=1`, main-thread CUDA warmup, `device_map=auto`, `gpu_max_memory_gib=132`
+  - 핵심 설정: `HF_DEACTIVATE_ASYNC_LOAD=1`, main-thread CUDA warmup, `device_map=auto`, `gpu_max_memory_gib=140`, `cpu_max_memory_gib=0`
   - 추가 의존성: `peft 0.19.1`, `accelerate 1.14.0`, `datasets 5.0.0`, `kernels 0.12.3`
   - 주의: transformers 5.12.1은 `kernels>=0.12,<0.13`을 요구한다. `kernels 0.16.0`은 import 단계에서 깨진다.
+  - `bitsandbytes`는 `scripts/setup_glm52_vllm_uv_20260627.sh`에서 `--no-deps --force-reinstall bitsandbytes==0.49.2`로 설치한다. 일반 `pip install --ignore-installed bitsandbytes`는 `torch`까지 CUDA 13 wheel로 바꾸려 하므로 쓰지 않는다.
 - FP8 direct LoRA smoke 결과:
   - CUDA init, tokenizer, 8GPU device-map 로딩, LoRA attach까지는 성공.
   - 1-step backward에서 실패: `w8a8_block_dynamic_fp8_matmul` autograd formula 없음.
   - 판단: FP8은 vLLM serving/eval 전용으로 유지하고 학습에는 쓰지 않는다.
-- 현재 긴 작업:
-  - session: `fable_glm52_bf16_download`
-  - log: `logs/20260627_glm52_bf16_download/download.log`
-  - 목적: trainable BF16 원본 `zai-org/GLM-5.2`를 `/home/work/.data/huggingface/hub`에 다운로드.
-  - runbook: `GLM52_FABLE_QLORA_RUNBOOK_20260627.ko.md`
+- BF16 GLM-5.2 다운로드 완료:
+  - snapshot: `/home/work/.data/huggingface/hub/models--zai-org--GLM-5.2/snapshots/f2263102df303b2faa54a6861a29d1770ce846c0`
+  - checker: `ready ... shards=282`
+  - 2026-06-27 13:59 KST 기준 `/home/work/.data` 여유는 약 `276G`
+- BF16 QLoRA smoke 상태:
+  - venv 내부 `bitsandbytes==0.49.2` 설치 완료. `torch 2.11.0+cu129`, `vllm 0.23.0`, `transformers 5.12.1`는 유지됨.
+  - 첫 재시도 실패 원인: `device_map=auto`가 일부 module을 CPU/disk로 보내려고 하면서 BitsAndBytes guard 발생.
+  - 조치: `scripts/run_glm52_bf16_qlora_device_map_20260627.sh` 기본값을 GPU-only placement로 변경 (`GPU_MAX_MEMORY_GIB=140`, `CPU_MAX_MEMORY_GIB=0`).
+  - 다음 작업: 1-step smoke 재실행 후 통과하면 25-step pilot.
 
 ## 현재 상태
 
@@ -47,7 +52,7 @@ GLM-5.2-FP8 다운로드와 Fable/Mythos 스타일 데이터 준비는 끝났다
 - HF cache: `/home/work/.data/huggingface/hub`
 - GLM snapshot: `/home/work/.data/huggingface/hub/models--zai-org--GLM-5.2-FP8/snapshots/70311cfa0158cce7dd2cf5d2e04f68e3fdc3efc1`
 - GLM cache size: 약 `707G`
-- BF16 GLM-5.2 dry-run: safetensors `282` shards, 대부분 `5.4G`, 총량 약 `1.5T`
+- BF16 GLM-5.2 snapshot: safetensors `282` shards, snapshot `f2263102df303b2faa54a6861a29d1770ce846c0`
 - GPU 상태: 학습/서빙 compute app 없음. GPU 메모리는 1MiB 수준까지 회수됨.
 - Git 상태: 로컬 `main`은 `origin/main`보다 4커밋 이상 앞섬.
 - Push 상태: HTTPS GitHub credential 없음으로 실패. 에러는 `fatal: could not read Username for 'https://github.com': No such device or address`.
@@ -254,24 +259,28 @@ python scripts/probe_glm52_vllm_server_20260627.py \
 
 ### C. GLM BF16 QLoRA 튜닝 경로
 
-FP8 LoRA long run은 시작하지 않는다. 학습은 BF16 원본 `zai-org/GLM-5.2` 다운로드 후 QLoRA로 진행한다.
+FP8 LoRA long run은 시작하지 않는다. 학습은 다운로드 완료된 BF16 원본 `zai-org/GLM-5.2`를 QLoRA로 로드해서 진행한다.
 
-현재 다운로드:
+현재 상태:
 
 ```bash
-tmux ls | rg fable_glm52_bf16_download
-tail -f logs/20260627_glm52_bf16_download/download.log
+tmux ls
 df -h /home/work/.data
+.venvs/glm52-vllm-cu129-release-driver570/bin/python scripts/check_glm52_bf16_snapshot_ready_20260627.py \
+  --model-id zai-org/GLM-5.2 \
+  --cache-dir /home/work/.data/huggingface/hub
 ```
 
-다운로드 완료 후 자동 학습 watcher:
+자동 학습 watcher:
 
 ```bash
 tmux new-session -d -s fable_glm52_bf16_ready_then_qlora \
   "cd /home/work/.projects/LLM-OS-Models/Terminal/fable_distillation && bash scripts/watch_glm52_bf16_ready_then_qlora_20260627.sh"
 ```
 
-다운로드 재시작:
+주의: watcher는 이미 한번 snapshot을 감지했고 smoke 실패와 함께 종료됐다. 지금은 `run_glm52_bf16_qlora_device_map_20260627.sh`를 직접 재실행해 다음 load failure를 보는 것이 더 빠르다.
+
+다운로드 재시작이 필요하면:
 
 ```bash
 cd /home/work/.projects/LLM-OS-Models/Terminal/fable_distillation
@@ -284,7 +293,7 @@ QLoRA dry-run:
 bash scripts/run_glm52_bf16_qlora_device_map_20260627.sh
 ```
 
-다운로드 완료 후 1-step smoke:
+다음 1-step smoke:
 
 ```bash
 RUN_NOW=1 \

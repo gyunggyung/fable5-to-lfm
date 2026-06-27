@@ -57,8 +57,11 @@ LORA_RANK="${LORA_RANK:-64}"
 LORA_ALPHA="${LORA_ALPHA:-128}"
 LORA_DROPOUT="${LORA_DROPOUT:-0.02}"
 TARGET_MODULES="${TARGET_MODULES:-q_proj,k_proj,v_proj,o_proj}"
-GPU_MAX_MEMORY_GIB="${GPU_MAX_MEMORY_GIB:-132}"
-CPU_MAX_MEMORY_GIB="${CPU_MAX_MEMORY_GIB:-96}"
+# Keep the 4-bit base on the 8x H200s. If CPU memory is exposed to
+# Transformers' auto device map, BitsAndBytes can dispatch some modules to CPU
+# and abort before loading the model.
+GPU_MAX_MEMORY_GIB="${GPU_MAX_MEMORY_GIB:-140}"
+CPU_MAX_MEMORY_GIB="${CPU_MAX_MEMORY_GIB:-0}"
 RESUME_FROM_CHECKPOINT="${RESUME_FROM_CHECKPOINT:-auto}"
 BNB_4BIT_QUANT_TYPE="${BNB_4BIT_QUANT_TYPE:-nf4}"
 BNB_4BIT_COMPUTE_DTYPE="${BNB_4BIT_COMPUTE_DTYPE:-bfloat16}"
