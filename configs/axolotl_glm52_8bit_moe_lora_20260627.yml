@@ -52,7 +52,7 @@ gradient_checkpointing: true
 flash_attention: false
 attn_implementation: sdpa
 
-optimizer: adamw_bnb_8bit
+optimizer: adamw_torch_8bit
 
 fsdp:
   - auto_wrap
