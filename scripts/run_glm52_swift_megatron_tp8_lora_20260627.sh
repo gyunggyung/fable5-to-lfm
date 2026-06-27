@@ -20,6 +20,9 @@ export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 export TOKENIZERS_PARALLELISM=false
 export NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
+export TENSOR_MODEL_PARALLEL_SIZE="${TENSOR_MODEL_PARALLEL_SIZE:-4}"
+export PIPELINE_MODEL_PARALLEL_SIZE="${PIPELINE_MODEL_PARALLEL_SIZE:-2}"
+export EXPERT_MODEL_PARALLEL_SIZE="${EXPERT_MODEL_PARALLEL_SIZE:-4}"
 
 MODEL_SLUG="${MODEL_SLUG:-GLM-5.2-Agentic-Fable5-Composer2.5-TP8-LoRA}"
 RUN_ID="${RUN_ID:-20260627_glm52_swift_megatron_tp8_lora}"
@@ -71,8 +74,14 @@ env -u PYTHONPATH PYTHONNOUSERSITE=1 \
     --use_hf true \
     --save_safetensors true \
     --dataset "$SWIFT_JSONL" \
-    --tensor_model_parallel_size 8 \
+    --tensor_model_parallel_size "$TENSOR_MODEL_PARALLEL_SIZE" \
+    --pipeline_model_parallel_size "$PIPELINE_MODEL_PARALLEL_SIZE" \
+    --expert_model_parallel_size "$EXPERT_MODEL_PARALLEL_SIZE" \
     --sequence_parallel true \
+    --moe_permute_fusion true \
+    --moe_grouped_gemm true \
+    --moe_shared_expert_overlap true \
+    --moe_aux_loss_coeff 1e-6 \
     --micro_batch_size 1 \
     --global_batch_size 8 \
     --recompute_granularity full \
