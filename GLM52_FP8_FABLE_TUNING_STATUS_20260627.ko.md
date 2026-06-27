@@ -128,7 +128,7 @@ cd /home/work/.projects/LLM-OS-Models/Terminal/fable_distillation
 bash scripts/setup_glm52_vllm_uv_20260627.sh
 ```
 
-2026-06-27 11:30 KST 기준 GLM 전용 env 설치 확인:
+2026-06-27 11:30 KST 기준 첫 GLM 전용 env 설치 확인:
 
 ```text
 env: .venvs/glm52-vllm-cu128
@@ -137,7 +137,24 @@ transformers: 5.12.1
 vllm: 0.23.0
 ```
 
-중요: 이 env는 반드시 `env -u PYTHONPATH PYTHONNOUSERSITE=1`로 실행해야 한다. 그렇지 않으면 `/home/work/.local/lib/python3.12/site-packages`가 먼저 잡혀 기존 `torch 2.12.0.dev20260407+cu128`, `transformers 5.5.4`가 섞인다.
+이 env는 `vllm --version` import까지는 통과했지만, 실제 worker 초기화에서 `CUDA driver version is insufficient for CUDA runtime version`로 실패했다. 원인은 `uv --torch-backend=auto`가 CUDA 13 runtime wheel을 선택했기 때문이다. 로컬 드라이버는 `570.86.10`, CUDA `12.9` 노출이므로 GLM용 vLLM env는 `--torch-backend=cu128`로 다시 만들어야 한다.
+
+두 번째로 `--torch-backend=cu128` env도 만들었지만, vLLM 0.23.0 release asset에는 `cu128` wheel이 없고 PyPI wheel은 계속 CUDA 13 `libcudart.so.13`에 링크된다. 따라서 로컬 드라이버 `570.86.10`/CUDA `12.9`에 맞춰 GitHub release의 `vllm-0.23.0+cu129` wheel을 직접 설치하는 경로로 바꿨다.
+
+현재 스크립트 기본 env는 다음으로 바뀌었다.
+
+```text
+env: .venvs/glm52-vllm-cu129-release-driver570
+vLLM wheel: https://github.com/vllm-project/vllm/releases/download/v0.23.0/vllm-0.23.0%2Bcu129-cp38-abi3-manylinux_2_28_x86_64.whl
+torch backend: cu129
+torch: 2.11.0+cu129
+transformers: 5.12.1
+vllm --version: 0.23.0+cu129
+```
+
+중요: 이 env는 반드시 `env -u PYTHONPATH PYTHONNOUSERSITE=1`로 실행해야 한다. 그렇지 않으면 `/home/work/.local/lib/python3.12/site-packages`가 먼저 잡혀 기존 `torch 2.12.0.dev20260407+cu128`, `transformers 5.5.4`가 섞일 수 있다. 또한 `scripts/run_glm52_fp8_vllm_server_20260627.sh`가 venv 내부 CUDA runtime library 경로를 찾아 `LD_LIBRARY_PATH`를 자동으로 구성한다.
+
+`ldd` 확인에서 `vllm/_C.abi3.so`는 `libcudart.so.12`를 `nvidia/cuda_runtime/lib`에서 잡는다. 이 경로가 `nvidia/cu13/lib`보다 먼저 오도록 스크립트에 반영했다.
 
 서버 dry-run:
 

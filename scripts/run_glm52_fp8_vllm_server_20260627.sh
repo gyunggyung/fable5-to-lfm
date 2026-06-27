@@ -18,7 +18,7 @@ export HF_HUB_CACHE="${HF_HUB_CACHE:-$HF_HOME/hub}"
 export HF_XET_HIGH_PERFORMANCE="${HF_XET_HIGH_PERFORMANCE:-1}"
 
 RUN_NOW="${RUN_NOW:-0}"
-ENV_DIR="${ENV_DIR:-$FABLE_DIR/.venvs/glm52-vllm-cu128}"
+ENV_DIR="${ENV_DIR:-$FABLE_DIR/.venvs/glm52-vllm-cu129-release-driver570}"
 MODEL_PATH="${MODEL_PATH:-zai-org/GLM-5.2-FP8}"
 SERVED_MODEL_NAME="${SERVED_MODEL_NAME:-glm-5.2-fp8}"
 HOST="${HOST:-0.0.0.0}"
@@ -33,10 +33,34 @@ LOG_DIR="${LOG_DIR:-$FABLE_DIR/logs/20260627_glm52_fp8_vllm_server}"
 
 mkdir -p "$LOG_DIR"
 
+if [[ -x "$ENV_DIR/bin/python" ]]; then
+  SITE_PACKAGES="$(env -u PYTHONPATH PYTHONNOUSERSITE=1 "$ENV_DIR/bin/python" - <<'PY'
+import site
+
+print(site.getsitepackages()[0])
+PY
+)"
+else
+  SITE_PACKAGES="$ENV_DIR/lib/python3.12/site-packages"
+fi
+NVIDIA_LIB_PATHS="$(
+  find "$SITE_PACKAGES/nvidia" -type d -name lib 2>/dev/null | paste -sd: -
+)"
+PRIMARY_CUDA_RUNTIME_LIB="$SITE_PACKAGES/nvidia/cuda_runtime/lib"
+OTHER_CUDA_RUNTIME_LIB_PATHS="$(
+  find "$SITE_PACKAGES/nvidia" -name 'libcudart.so*' -printf '%h\n' 2>/dev/null \
+    | sort -u \
+    | awk -v primary="$PRIMARY_CUDA_RUNTIME_LIB" '$0 != primary' \
+    | paste -sd: -
+)"
+CUDA_RUNTIME_LIB_PATHS="$PRIMARY_CUDA_RUNTIME_LIB${OTHER_CUDA_RUNTIME_LIB_PATHS:+:$OTHER_CUDA_RUNTIME_LIB_PATHS}"
+VLLM_LD_LIBRARY_PATH="${CUDA_RUNTIME_LIB_PATHS}${NVIDIA_LIB_PATHS:+:$NVIDIA_LIB_PATHS}${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
 cmd=(
   env
   -u PYTHONPATH
   PYTHONNOUSERSITE=1
+  LD_LIBRARY_PATH="$VLLM_LD_LIBRARY_PATH"
   CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES"
   HF_HOME="$HF_HOME"
   HF_HUB_CACHE="$HF_HUB_CACHE"
@@ -63,6 +87,8 @@ printf 'model=%s\nserved_model_name=%s\nhost=%s\nport=%s\n' \
   "$MODEL_PATH" "$SERVED_MODEL_NAME" "$HOST" "$PORT"
 printf 'env=%s\ngpus=%s tp=%s max_model_len=%s max_num_seqs=%s gpu_mem_util=%s\n' \
   "$ENV_DIR" "$CUDA_VISIBLE_DEVICES" "$TENSOR_PARALLEL_SIZE" "$MAX_MODEL_LEN" "$MAX_NUM_SEQS" "$GPU_MEMORY_UTILIZATION"
+printf 'site_packages=%s\n' "$SITE_PACKAGES"
+printf 'cuda_runtime_lib_paths=%s\n' "$CUDA_RUNTIME_LIB_PATHS"
 printf 'command:\n  '
 printf '%q ' "${cmd[@]}"
 printf '\n'
