@@ -61,6 +61,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--optim", default="adamw_torch")
     parser.add_argument("--attn-implementation", default="sdpa")
     parser.add_argument(
+        "--torch-dtype",
+        choices=("auto", "bfloat16", "float16", "float32"),
+        default="bfloat16",
+        help="Model load dtype. Use auto for native quantized checkpoints such as FP8.",
+    )
+    parser.add_argument(
         "--ddp-find-unused-parameters",
         choices=("true", "false"),
         default="false",
@@ -82,8 +88,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lora-dropout", type=float, default=0.0)
     parser.add_argument("--target-modules", default="all-linear")
     parser.add_argument("--finetune-mode", choices=("lora", "full"), default="lora")
+    parser.add_argument(
+        "--place-model-on-current-device-before-lora",
+        action="store_true",
+        help="Move the model to the current CUDA device before PEFT setup. Useful for DDP LoRA jobs on large GPUs.",
+    )
     parser.add_argument("--fsdp", default="")
     parser.add_argument("--fsdp-config-json", default="")
+    parser.add_argument("--deepspeed-config", default="")
     return parser.parse_args()
 
 
@@ -93,6 +105,13 @@ def configure_cuda_device() -> None:
     local_rank = os.environ.get("LOCAL_RANK")
     if local_rank is not None:
         torch.cuda.set_device(int(local_rank))
+
+
+def log_rank(message: str) -> None:
+    rank = int(os.environ.get("RANK", "0"))
+    local_rank = os.environ.get("LOCAL_RANK", "?")
+    timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    print(f"[{timestamp}][rank={rank} local_rank={local_rank}] {message}", flush=True)
 
 
 def parse_target_modules(value: str) -> str | list[str]:
@@ -170,13 +189,17 @@ def apply_chat_template(
     *,
     add_generation_prompt: bool,
     template_kwargs: dict[str, Any],
+    tools: list[dict[str, Any]] | None = None,
 ) -> list[int]:
+    kwargs = dict(template_kwargs)
+    if tools:
+        kwargs["tools"] = tools
     result = backend.apply_chat_template(
         messages,
         tokenize=True,
         add_generation_prompt=add_generation_prompt,
         return_dict=False,
-        **template_kwargs,
+        **kwargs,
     )
     if isinstance(result, dict):
         result = result.get("input_ids")
@@ -214,6 +237,7 @@ def encode_chat_messages(
     add_generation_prompt: bool,
     chat_serialization: str,
     template_kwargs: dict[str, Any],
+    tools: list[dict[str, Any]] | None,
 ) -> list[int]:
     if chat_serialization == "simple-chatml":
         rendered = render_simple_chatml(messages, add_generation_prompt=add_generation_prompt)
@@ -223,7 +247,18 @@ def encode_chat_messages(
         messages,
         add_generation_prompt=add_generation_prompt,
         template_kwargs=template_kwargs,
+        tools=tools,
     )
+
+
+def resolve_torch_dtype(value: str) -> torch.dtype | str:
+    if value == "auto":
+        return "auto"
+    return {
+        "bfloat16": torch.bfloat16,
+        "float16": torch.float16,
+        "float32": torch.float32,
+    }[value]
 
 
 def load_model(args: argparse.Namespace) -> torch.nn.Module:
@@ -234,7 +269,7 @@ def load_model(args: argparse.Namespace) -> torch.nn.Module:
     }[args.model_class]
     kwargs: dict[str, Any] = {
         "trust_remote_code": True,
-        "dtype": torch.bfloat16,
+        "dtype": resolve_torch_dtype(args.torch_dtype),
         "low_cpu_mem_usage": True,
     }
     if args.attn_implementation:
@@ -249,6 +284,7 @@ def load_model(args: argparse.Namespace) -> torch.nn.Module:
 def main() -> None:
     configure_cuda_device()
     args = parse_args()
+    log_rank("starting SFT runner")
     fsdp_config = load_fsdp_config(args.fsdp_config_json)
     template_kwargs = load_template_kwargs(args.chat_template_kwargs_json)
     use_fsdp_activation_checkpointing = bool(fsdp_config.get("activation_checkpointing"))
@@ -256,7 +292,9 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    log_rank(f"loading tokenizer/template backend: {args.model_path}")
     template_backend, tokenizer = load_template_backend(args.model_path)
+    log_rank(f"loading dataset: {args.train_jsonl}")
     dataset = load_dataset("json", data_files=args.train_jsonl, split="train")
     if args.max_train_rows and len(dataset) > args.max_train_rows:
         rng = random.Random(args.sample_seed)
@@ -267,6 +305,9 @@ def main() -> None:
         messages = row["messages"]
         if not isinstance(messages, list) or len(messages) < 2:
             raise ValueError("row must contain at least two chat messages")
+        tools = row.get("tools")
+        if not isinstance(tools, list):
+            tools = None
         prompt_messages = messages[:-1]
         full_ids = encode_chat_messages(
             template_backend,
@@ -275,6 +316,7 @@ def main() -> None:
             add_generation_prompt=False,
             chat_serialization=args.chat_serialization,
             template_kwargs=template_kwargs,
+            tools=tools,
         )
         prompt_ids = encode_chat_messages(
             template_backend,
@@ -283,6 +325,7 @@ def main() -> None:
             add_generation_prompt=True,
             chat_serialization=args.chat_serialization,
             template_kwargs=template_kwargs,
+            tools=tools,
         )
         if len(full_ids) > args.max_seq_length:
             full_ids = full_ids[-args.max_seq_length :]
@@ -303,10 +346,12 @@ def main() -> None:
         lock_path = cache_dir.parent / f"{cache_dir.name}.lock"
         cache_dir.parent.mkdir(parents=True, exist_ok=True)
         if success_path.exists():
+            log_rank(f"loading tokenized cache: {cache_dir}")
             tokenized = load_from_disk(str(cache_dir))
         else:
             lock_fd = acquire_file_lock(lock_path)
             if lock_fd is None:
+                log_rank(f"waiting for tokenized cache lock: {lock_path}")
                 wait_for_tokenized_cache(cache_dir, lock_path)
                 if not success_path.exists():
                     lock_fd = acquire_file_lock(lock_path)
@@ -314,15 +359,19 @@ def main() -> None:
                 try:
                     if cache_dir.exists() and not success_path.exists():
                         shutil.rmtree(cache_dir)
+                    log_rank(f"building tokenized cache: {cache_dir}")
                     tokenized = build_tokenized_dataset()
                     tokenized.save_to_disk(str(cache_dir))
                     success_path.write_text("ok\n")
+                    log_rank(f"wrote tokenized cache: {cache_dir}")
                 finally:
                     os.close(lock_fd)
                     lock_path.unlink(missing_ok=True)
             else:
+                log_rank(f"loading tokenized cache after wait: {cache_dir}")
                 tokenized = load_from_disk(str(cache_dir))
     else:
+        log_rank("building tokenized dataset without disk cache")
         tokenized = build_tokenized_dataset()
 
     def collate(features: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
@@ -340,10 +389,21 @@ def main() -> None:
             "labels": torch.tensor(labels, dtype=torch.long),
         }
 
+    log_rank(f"loading model: {args.model_path}")
     model = load_model(args)
+    log_rank("model loaded")
+    if args.place_model_on_current_device_before_lora and torch.cuda.is_available():
+        device = torch.device("cuda", torch.cuda.current_device())
+        log_rank(f"moving model to {device} before LoRA setup")
+        model.to(device)
+        log_rank(f"model moved to {device}")
     model.config.use_cache = False
     if not use_fsdp_activation_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
+        log_rank("enabling gradient checkpointing")
         model.gradient_checkpointing_enable()
+    if args.finetune_mode == "lora" and hasattr(model, "enable_input_require_grads"):
+        log_rank("enabling input require grads")
+        model.enable_input_require_grads()
 
     if args.finetune_mode == "full":
         if args.sft_adapter_path:
@@ -351,8 +411,10 @@ def main() -> None:
         for param in model.parameters():
             param.requires_grad_(True)
     elif args.sft_adapter_path:
+        log_rank(f"loading trainable LoRA adapter: {args.sft_adapter_path}")
         model = PeftModel.from_pretrained(model, args.sft_adapter_path, is_trainable=True)
     else:
+        log_rank(f"creating LoRA adapter: target_modules={args.target_modules} r={args.lora_rank}")
         model = get_peft_model(
             model,
             LoraConfig(
@@ -364,6 +426,7 @@ def main() -> None:
                 bias="none",
             ),
         )
+    log_rank("LoRA/model trainable setup complete")
 
     training_kwargs: dict[str, Any] = {
         "output_dir": str(output_dir),
@@ -388,13 +451,17 @@ def main() -> None:
         training_kwargs["fsdp"] = args.fsdp
     if fsdp_config:
         training_kwargs["fsdp_config"] = fsdp_config
+    if args.deepspeed_config:
+        training_kwargs["deepspeed"] = args.deepspeed_config
 
+    log_rank("creating Trainer")
     trainer = Trainer(
         model=model,
         args=TrainingArguments(**training_kwargs),
         train_dataset=tokenized,
         data_collator=collate,
     )
+    log_rank("Trainer created")
 
     resume_from_checkpoint = None
     if args.resume_from_checkpoint:
@@ -407,7 +474,9 @@ def main() -> None:
                 resume_from_checkpoint = str(checkpoints[-1])
         else:
             resume_from_checkpoint = args.resume_from_checkpoint
+    log_rank(f"starting training resume_from_checkpoint={resume_from_checkpoint}")
     trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+    log_rank("training complete")
 
     final_dir = output_dir / ("final_model" if args.finetune_mode == "full" else "final_lora")
     trainer.save_model(str(final_dir))
