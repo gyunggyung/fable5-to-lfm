@@ -24,11 +24,14 @@ export TENSOR_MODEL_PARALLEL_SIZE="${TENSOR_MODEL_PARALLEL_SIZE:-4}"
 export PIPELINE_MODEL_PARALLEL_SIZE="${PIPELINE_MODEL_PARALLEL_SIZE:-2}"
 export EXPERT_MODEL_PARALLEL_SIZE="${EXPERT_MODEL_PARALLEL_SIZE:-4}"
 
-MODEL_SLUG="${MODEL_SLUG:-GLM-5.2-Agentic-Fable5-Composer2.5-TP8-LoRA}"
+MODEL_SLUG="${MODEL_SLUG:-GLM-5.2-FP8-Agentic-Fable5-Composer2.5-TP8-LoRA}"
 RUN_ID="${RUN_ID:-20260627_glm52_swift_megatron_tp8_lora}"
 SWIFT_ENV="${SWIFT_ENV:-/home/work/.cache/fable_distillation/venvs/glm52-swift-megatron}"
 SWIFT_SITE="$SWIFT_ENV/lib/python3.12/site-packages"
-GLM52_MODEL="${GLM52_MODEL:-/home/work/.data/huggingface/hub/models--zai-org--GLM-5.2/snapshots/f2263102df303b2faa54a6861a29d1770ce846c0}"
+GLM52_MODEL="${GLM52_MODEL:-/home/work/.data/huggingface/hub/models--zai-org--GLM-5.2-FP8/snapshots/70311cfa0158cce7dd2cf5d2e04f68e3fdc3efc1}"
+TORCH_DTYPE="${TORCH_DTYPE:-bfloat16}"
+QUANT_METHOD="${QUANT_METHOD:-fp8}"
+QUANT_BITS="${QUANT_BITS:-float8}"
 SOURCE_JSONL="${SOURCE_JSONL:-$FABLE_DIR/datasets/official_agentic_sft_mix_20260627.jsonl}"
 SWIFT_JSONL="${SWIFT_JSONL:-$FABLE_DIR/datasets/official_agentic_sft_mix_20260627.swift_agent.jsonl}"
 OUTPUT_DIR="${OUTPUT_DIR:-/home/work/.data/harness1/models/zai-org__GLM-5.2__${MODEL_SLUG}-20260627}"
@@ -72,7 +75,11 @@ env -u PYTHONPATH PYTHONNOUSERSITE=1 \
   "$SWIFT_ENV/bin/megatron" sft \
     --model "$GLM52_MODEL" \
     --use_hf true \
+    --torch_dtype "$TORCH_DTYPE" \
+    --quant_method "$QUANT_METHOD" \
+    --quant_bits "$QUANT_BITS" \
     --save_safetensors true \
+    --merge_lora false \
     --dataset "$SWIFT_JSONL" \
     --tensor_model_parallel_size "$TENSOR_MODEL_PARALLEL_SIZE" \
     --pipeline_model_parallel_size "$PIPELINE_MODEL_PARALLEL_SIZE" \
