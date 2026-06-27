@@ -29,11 +29,11 @@ fi
   --index-strategy unsafe-best-match \
   "torch>=2.11,<2.13"
 
-env -u PYTHONPATH PYTHONNOUSERSITE=1 "$ENV_DIR/bin/python" -m pip install \
+env -u PIP_CONSTRAINT -u PYTHONPATH PYTHONNOUSERSITE=1 "$ENV_DIR/bin/python" -m pip install \
   --no-build-isolation \
   "axolotl[deepspeed] @ git+https://github.com/axolotl-ai-cloud/axolotl.git"
 
-env -u PYTHONPATH PYTHONNOUSERSITE=1 "$ENV_DIR/bin/python" - <<'PY'
+env -u PIP_CONSTRAINT -u PYTHONPATH PYTHONNOUSERSITE=1 "$ENV_DIR/bin/python" - <<'PY'
 import torch
 print("torch", torch.__version__, "cuda", torch.version.cuda, "gpus", torch.cuda.device_count())
 import axolotl
