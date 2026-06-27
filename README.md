@@ -26,6 +26,7 @@ Main takeaway: **ToolBench foundation + Fable terminal traces beat raw-base Mega
 
 Current 2026-06-24 experiment status:
 
+- 2026-06-27 GLM-5.2-FP8 status: download completed under `/home/work/.data/huggingface`, Fable/Mythos-style official-agentic SFT mix built with 19,536 rows, and GLM HF Trainer LoRA smoke was stopped because model loading was CPU-replicating across ranks instead of using 8xH200 memory. Next safe path is GLM vLLM 0.23+ serving/evaluation first, then a separate verified tuning path. See [GLM-5.2-FP8 Fable tuning status](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md).
 - Running script: `scripts/run_glm52_chaser_mix_sft_20260624.sh`
 - Training data: `datasets/glm52_chaser_terminal_toolmix_20260624.jsonl` (11,416 rows)
 - Base model: `Fabliq-8B-Agent-Reasoning`
@@ -161,6 +162,9 @@ See [DATA_SOURCES_20260623.ko.md](./DATA_SOURCES_20260623.ko.md) for detailed da
 - `run_post_chaser_multimodel_queue_20260624.sh` — waits for the current chaser run, then launches DiffusionGemma eval/smoke before Gemma/Qwen jobs
 - `setup_diffusiongemma_transformers_uv_20260624.sh` — isolated Docker-free uv env for DiffusionGemma Transformers eval with torch cu128
 - `setup_diffusiongemma_vllm_uv_20260624.sh` — vLLM wheel env kept for future direct support; not used for the current no-Docker dLLM run
+- `setup_glm52_vllm_uv_20260627.sh` — Docker-free GLM-5.2-FP8 vLLM 0.23 env setup
+- `run_glm52_fp8_vllm_server_20260627.sh` — official-style 8-way tensor-parallel GLM-5.2-FP8 vLLM server launcher
+- `probe_glm52_vllm_server_20260627.py` — OpenAI-compatible smoke probe for a running GLM vLLM server
 - `replay_eval_vllm.py`, `replay_metrics.py`, `summarize_replay_results.py` — local replay evaluator
 
 ### Training code (`training/`)
@@ -210,6 +214,7 @@ Apache 2.0 (inherited from LiquidAI LFM base).
 
 - [Final Report](./FINAL_REPORT_20260624.ko.md) (Korean, comprehensive results)
 - [TB2 vLLM Benchmark](./TB2_VLLM_BENCHMARK_20260624.ko.md)
+- [GLM-5.2-FP8 Fable Tuning Status](./GLM52_FP8_FABLE_TUNING_STATUS_20260627.ko.md)
 - [GLM-5.2 Chaser Experiment](./GLM52_CHASER_EXPERIMENT_20260624.ko.md)
 - [Multi-model GLM-5.2 Chaser Plan](./MULTI_MODEL_GLM52_CHASER_PLAN_20260624.ko.md)
 - [DiffusionGemma dLLM Eval Plan](./DIFFUSIONGEMMA_DLLM_EVAL_PLAN_20260624.ko.md)
