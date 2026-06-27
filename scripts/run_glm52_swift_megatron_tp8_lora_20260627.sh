@@ -76,7 +76,7 @@ env -u PYTHONPATH PYTHONNOUSERSITE=1 \
     --recompute_method uniform \
     --recompute_num_layers 1 \
     --finetune true \
-    --train_type lora \
+    --tuner_type lora \
     --lora_rank 16 \
     --lora_alpha 32 \
     --target_modules q_proj k_proj v_proj o_proj \
@@ -84,7 +84,7 @@ env -u PYTHONPATH PYTHONNOUSERSITE=1 \
     --lr 8e-6 \
     --lr_warmup_fraction 0.05 \
     --min_lr 8e-7 \
-    --max_steps "${MAX_STEPS:-200}" \
+    --train_iters "${MAX_STEPS:-200}" \
     --output_dir "$OUTPUT_DIR" \
     --save_steps "${SAVE_STEPS:-25}" \
     --max_length "${MAX_LENGTH:-2048}" \
