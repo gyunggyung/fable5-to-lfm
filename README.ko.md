@@ -169,6 +169,7 @@ TB2-lite vLLM 근거:
 - `run_glm52_fp8_device_map_lora_20260627.sh` — single-process 8GPU `device_map=auto` GLM-5.2-FP8 LoRA smoke/장시간 실행 launcher
 - `download_glm52_bf16_20260627.sh` — `/home/work/.data/huggingface`로 `zai-org/GLM-5.2` BF16 원본을 이어받는 downloader
 - `run_glm52_bf16_qlora_device_map_20260627.sh` — 학습 가능한 GLM-5.2 BF16 -> 4-bit QLoRA launcher
+- `check_glm52_bf16_snapshot_ready_20260627.py`, `watch_glm52_bf16_ready_then_qlora_20260627.sh` — BF16 snapshot 완료를 기다렸다가 QLoRA smoke, pilot, long training을 자동 실행하는 watcher
 - `replay_eval_vllm.py`, `replay_metrics.py`, `summarize_replay_results.py` — local replay evaluator
 
 ### 학습 코드 (`training/`)

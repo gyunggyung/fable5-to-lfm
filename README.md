@@ -168,6 +168,7 @@ See [DATA_SOURCES_20260623.ko.md](./DATA_SOURCES_20260623.ko.md) for detailed da
 - `run_glm52_fp8_device_map_lora_20260627.sh` — single-process 8GPU `device_map=auto` GLM-5.2-FP8 LoRA smoke/long-run launcher
 - `download_glm52_bf16_20260627.sh` — resumable BF16 `zai-org/GLM-5.2` download into `/home/work/.data/huggingface`
 - `run_glm52_bf16_qlora_device_map_20260627.sh` — trainable GLM-5.2 BF16 -> 4-bit QLoRA launcher
+- `check_glm52_bf16_snapshot_ready_20260627.py`, `watch_glm52_bf16_ready_then_qlora_20260627.sh` — wait for the BF16 snapshot, then run QLoRA smoke, pilot, and long training
 - `replay_eval_vllm.py`, `replay_metrics.py`, `summarize_replay_results.py` — local replay evaluator
 
 ### Training code (`training/`)

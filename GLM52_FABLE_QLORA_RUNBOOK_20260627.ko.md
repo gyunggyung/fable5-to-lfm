@@ -85,6 +85,22 @@ fable_glm52_bf16_download
 scripts/download_glm52_bf16_20260627.sh
 ```
 
+다운로드 완료 후 자동 학습 watcher:
+
+```text
+scripts/check_glm52_bf16_snapshot_ready_20260627.py
+scripts/watch_glm52_bf16_ready_then_qlora_20260627.sh
+```
+
+권장 실행:
+
+```bash
+tmux new-session -d -s fable_glm52_bf16_ready_then_qlora \
+  "cd /home/work/.projects/LLM-OS-Models/Terminal/fable_distillation && bash scripts/watch_glm52_bf16_ready_then_qlora_20260627.sh"
+```
+
+이 watcher는 `model.safetensors.index.json`에 나온 모든 shard가 local cache에 있는지 확인한다. 완료되면 1-step smoke, 25-step pilot, long resumable QLoRA 순서로 이어간다. `START_LONG_AFTER_PILOT=0`을 주면 pilot까지만 하고 멈춘다.
+
 다운로드 재시작:
 
 ```bash
@@ -172,6 +188,7 @@ tmux new-session -d -s fable_glm52_bf16_qlora_long \
 
 ```bash
 tmux kill-session -t fable_glm52_bf16_qlora_long 2>/dev/null || true
+tmux kill-session -t fable_glm52_bf16_ready_then_qlora 2>/dev/null || true
 pgrep -af 'train_glm52_fp8_device_map_lora.py'
 nvidia-smi --query-compute-apps=pid,process_name,used_memory --format=csv,noheader,nounits || true
 ```

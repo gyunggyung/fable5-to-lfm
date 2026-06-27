@@ -26,6 +26,7 @@ GLM-5.2-FP8 다운로드와 Fable/Mythos 스타일 데이터 준비는 끝났다
   - runner: `scripts/run_glm52_fp8_device_map_lora_20260627.sh`
   - BF16 QLoRA runner: `scripts/run_glm52_bf16_qlora_device_map_20260627.sh`
   - BF16 download runner: `scripts/download_glm52_bf16_20260627.sh`
+  - BF16 ready watcher: `scripts/watch_glm52_bf16_ready_then_qlora_20260627.sh`
   - 기본 env: `.venvs/glm52-vllm-cu129-release-driver570`
   - 핵심 설정: `HF_DEACTIVATE_ASYNC_LOAD=1`, main-thread CUDA warmup, `device_map=auto`, `gpu_max_memory_gib=132`
   - 추가 의존성: `peft 0.19.1`, `accelerate 1.14.0`, `datasets 5.0.0`, `kernels 0.12.3`
@@ -95,6 +96,8 @@ datasets/official_agentic_sft_mix_20260627.meta.json
 - `scripts/run_glm52_fp8_device_map_lora_20260627.sh`
 - `scripts/download_glm52_bf16_20260627.sh`
 - `scripts/run_glm52_bf16_qlora_device_map_20260627.sh`
+- `scripts/check_glm52_bf16_snapshot_ready_20260627.py`
+- `scripts/watch_glm52_bf16_ready_then_qlora_20260627.sh`
 - `training/train_multifamily_chat_sft.py`
 - `training/train_glm52_fp8_device_map_lora.py`
 
@@ -261,6 +264,13 @@ tail -f logs/20260627_glm52_bf16_download/download.log
 df -h /home/work/.data
 ```
 
+다운로드 완료 후 자동 학습 watcher:
+
+```bash
+tmux new-session -d -s fable_glm52_bf16_ready_then_qlora \
+  "cd /home/work/.projects/LLM-OS-Models/Terminal/fable_distillation && bash scripts/watch_glm52_bf16_ready_then_qlora_20260627.sh"
+```
+
 다운로드 재시작:
 
 ```bash
@@ -317,6 +327,7 @@ GLM smoke/training 중단:
 cd /home/work/.projects/LLM-OS-Models/Terminal/fable_distillation
 tmux kill-session -t fable_glm52_retry_train 2>/dev/null || true
 tmux kill-session -t fable_glm52_device_map_smoke 2>/dev/null || true
+tmux kill-session -t fable_glm52_bf16_ready_then_qlora 2>/dev/null || true
 tmux kill-session -t fable_glm52_bf16_qlora_long 2>/dev/null || true
 pgrep -af 'train_multifamily_chat_sft.py|torch.distributed.run'
 pgrep -af 'train_glm52_fp8_device_map_lora.py'
