@@ -20,6 +20,7 @@ import torch
 from datasets import load_dataset, load_from_disk
 from peft import LoraConfig, PeftModel, get_peft_model
 from transformers import (
+    AutoConfig,
     AutoModelForCausalLM,
     AutoModelForImageTextToText,
     AutoModelForMultimodalLM,
@@ -28,6 +29,7 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+from transformers.integrations.deepspeed import HfDeepSpeedConfig
 
 
 def parse_args() -> argparse.Namespace:
@@ -218,6 +220,45 @@ def stringify_content(content: Any) -> str:
     return json.dumps(content, ensure_ascii=False, separators=(",", ":"))
 
 
+def template_needs_mapping_tool_arguments(backend: Any) -> bool:
+    template = getattr(backend, "chat_template", None)
+    if template is None and hasattr(backend, "tokenizer"):
+        template = getattr(backend.tokenizer, "chat_template", None)
+    return isinstance(template, str) and "tc.arguments" in template and ".items()" in template
+
+
+def normalize_tool_call_arguments(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for message in messages:
+        copied = dict(message)
+        tool_calls = copied.get("tool_calls")
+        if isinstance(tool_calls, list):
+            copied_tool_calls = []
+            for tool_call in tool_calls:
+                if not isinstance(tool_call, dict):
+                    copied_tool_calls.append(tool_call)
+                    continue
+                copied_tool_call = dict(tool_call)
+                function = copied_tool_call.get("function")
+                if isinstance(function, dict):
+                    copied_function = dict(function)
+                    arguments = copied_function.get("arguments")
+                    if isinstance(arguments, str):
+                        try:
+                            parsed_arguments = json.loads(arguments)
+                        except json.JSONDecodeError:
+                            parsed_arguments = {"arguments": arguments}
+                        if isinstance(parsed_arguments, dict):
+                            copied_function["arguments"] = parsed_arguments
+                        else:
+                            copied_function["arguments"] = {"arguments": parsed_arguments}
+                    copied_tool_call["function"] = copied_function
+                copied_tool_calls.append(copied_tool_call)
+            copied["tool_calls"] = copied_tool_calls
+        normalized.append(copied)
+    return normalized
+
+
 def render_simple_chatml(messages: list[dict[str, Any]], *, add_generation_prompt: bool) -> str:
     chunks: list[str] = []
     for message in messages:
@@ -242,6 +283,8 @@ def encode_chat_messages(
     if chat_serialization == "simple-chatml":
         rendered = render_simple_chatml(messages, add_generation_prompt=add_generation_prompt)
         return list(tokenizer.encode(rendered, add_special_tokens=False))
+    if template_needs_mapping_tool_arguments(backend):
+        messages = normalize_tool_call_arguments(messages)
     return apply_chat_template(
         backend,
         messages,
@@ -261,14 +304,26 @@ def resolve_torch_dtype(value: str) -> torch.dtype | str:
     }[value]
 
 
+def patch_config_compat(config: Any) -> Any:
+    if getattr(config, "model_type", "") == "glm_moe_dsa" and hasattr(config, "n_routed_experts"):
+        routed_experts = getattr(config, "n_routed_experts")
+        if not hasattr(config, "num_experts"):
+            setattr(config, "num_experts", routed_experts)
+        if not hasattr(config, "num_local_experts"):
+            setattr(config, "num_local_experts", routed_experts)
+    return config
+
+
 def load_model(args: argparse.Namespace) -> torch.nn.Module:
     cls = {
         "causal-lm": AutoModelForCausalLM,
         "multimodal-lm": AutoModelForMultimodalLM,
         "image-text-to-text": AutoModelForImageTextToText,
     }[args.model_class]
+    config = patch_config_compat(AutoConfig.from_pretrained(args.model_path, trust_remote_code=True))
     kwargs: dict[str, Any] = {
         "trust_remote_code": True,
+        "config": config,
         "dtype": resolve_torch_dtype(args.torch_dtype),
         "low_cpu_mem_usage": True,
     }
@@ -389,6 +444,38 @@ def main() -> None:
             "labels": torch.tensor(labels, dtype=torch.long),
         }
 
+    training_kwargs: dict[str, Any] = {
+        "output_dir": str(output_dir),
+        "num_train_epochs": args.epochs,
+        "max_steps": args.max_steps,
+        "learning_rate": args.learning_rate,
+        "per_device_train_batch_size": args.per_device_train_batch_size,
+        "gradient_accumulation_steps": args.gradient_accumulation_steps,
+        "bf16": True,
+        "logging_steps": args.logging_steps,
+        "save_steps": args.save_steps,
+        "save_strategy": "steps",
+        "save_total_limit": args.save_total_limit,
+        "report_to": [],
+        "remove_unused_columns": False,
+        "dataloader_num_workers": 0,
+        "gradient_checkpointing": not use_fsdp_activation_checkpointing,
+        "ddp_find_unused_parameters": parse_bool(args.ddp_find_unused_parameters),
+        "optim": args.optim,
+    }
+    if args.fsdp:
+        training_kwargs["fsdp"] = args.fsdp
+    if fsdp_config:
+        training_kwargs["fsdp_config"] = fsdp_config
+    if args.deepspeed_config:
+        training_kwargs["deepspeed"] = args.deepspeed_config
+    hf_deepspeed_config = None
+    if args.deepspeed_config:
+        log_rank(f"initializing HfDeepSpeedConfig before model load: {args.deepspeed_config}")
+        hf_deepspeed_config = HfDeepSpeedConfig(args.deepspeed_config)
+    log_rank("creating TrainingArguments")
+    training_args = TrainingArguments(**training_kwargs)
+
     log_rank(f"loading model: {args.model_path}")
     model = load_model(args)
     log_rank("model loaded")
@@ -428,36 +515,10 @@ def main() -> None:
         )
     log_rank("LoRA/model trainable setup complete")
 
-    training_kwargs: dict[str, Any] = {
-        "output_dir": str(output_dir),
-        "num_train_epochs": args.epochs,
-        "max_steps": args.max_steps,
-        "learning_rate": args.learning_rate,
-        "per_device_train_batch_size": args.per_device_train_batch_size,
-        "gradient_accumulation_steps": args.gradient_accumulation_steps,
-        "bf16": True,
-        "logging_steps": args.logging_steps,
-        "save_steps": args.save_steps,
-        "save_strategy": "steps",
-        "save_total_limit": args.save_total_limit,
-        "report_to": [],
-        "remove_unused_columns": False,
-        "dataloader_num_workers": 0,
-        "gradient_checkpointing": not use_fsdp_activation_checkpointing,
-        "ddp_find_unused_parameters": parse_bool(args.ddp_find_unused_parameters),
-        "optim": args.optim,
-    }
-    if args.fsdp:
-        training_kwargs["fsdp"] = args.fsdp
-    if fsdp_config:
-        training_kwargs["fsdp_config"] = fsdp_config
-    if args.deepspeed_config:
-        training_kwargs["deepspeed"] = args.deepspeed_config
-
     log_rank("creating Trainer")
     trainer = Trainer(
         model=model,
-        args=TrainingArguments(**training_kwargs),
+        args=training_args,
         train_dataset=tokenized,
         data_collator=collate,
     )
@@ -486,6 +547,7 @@ def main() -> None:
     run_config = vars(args) | {
         "final_artifact_dir": str(final_dir),
         "final_artifact_type": args.finetune_mode,
+        "hf_deepspeed_config_active": hf_deepspeed_config is not None,
         "train_rows": len(dataset),
     }
     (output_dir / "run_config.json").write_text(json.dumps(run_config, ensure_ascii=False, indent=2) + "\n")
