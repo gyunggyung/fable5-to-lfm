@@ -8,7 +8,19 @@ GLM-5.2-FP8은 8xH200 vLLM serving/eval 용도로 성공했다. 하지만 FP8 ch
 
 2026-06-27 13:59 KST 기준 BF16 원본 다운로드는 완료됐다. 첫 1-step QLoRA smoke는 venv 내부 `bitsandbytes` 누락을 고친 뒤 다시 돌렸고, 다음 단계에서 `device_map=auto`가 일부 module을 CPU/disk로 dispatch하려고 해서 BitsAndBytes guard로 중단됐다. 단순히 `GPU_MAX_MEMORY_GIB=140`, `CPU_MAX_MEMORY_GIB=0`으로 바꿔도 auto estimator가 CPU/disk dispatch를 고집했다. 그래서 runner 기본 device map을 `glm_layers`로 바꾸고, trainer가 78개 `GlmMoeDsaDecoderLayer`를 8개 GPU에 직접 분산하도록 했다. 이 경로는 guard를 넘겼지만 22% load에서 GPU1 OOM으로 실패했다.
 
-최종 판단: 현재 로컬 Transformers+BitsAndBytes 경로로 GLM-5.2 BF16 QLoRA를 계속 미는 것은 맞지 않다. GLM MoE expert weight가 `Linear` module이 아니라 raw `Parameter`라 BitsAndBytes가 기대한 방식으로 대부분을 4bit로 줄이지 못한다. inspector 기준 BF16 총량은 `1403.19GiB`, raw MoE expert weight는 `1368.00GiB`다. GLM-5.2는 이 환경에서 FP8 vLLM eval/teacher 용도로 유지하고, 실제 Fable 스타일 튜닝은 Qwen/Gemma/MiniMax 등 trainable base로 진행하거나 Fireworks 같은 GLM-5.2-FP8 hosted LoRA/GLM-aware MoE training stack을 써야 한다.
+업데이트: 로컬 Transformers+BitsAndBytes BF16 QLoRA 경로는 보류한다. GLM MoE expert weight가 `Linear` module이 아니라 raw `Parameter`라 대부분을 4bit로 줄이지 못했고, inspector 기준 BF16 총량은 `1403.19GiB`, raw MoE expert weight는 `1368.00GiB`다. 대신 Axolotl의 GLM/MoE 전용 경로를 사용한다. 현재 유효 경로는 `load_in_8bit: true`, `quantize_moe_experts: true`, FSDP2, LoRA target modules `q_proj,k_proj,v_proj,o_proj`, expert target parameters `mlp.experts.gate_up_proj`, `mlp.experts.down_proj`이다.
+
+2026-06-27 현재 active run:
+
+```text
+tmux: fable_glm52_axolotl_8bit_chunk_patch2_20260627
+run_id: 20260627_glm52_axolotl_8bit_moe_lora_chunk_patch2
+log: logs/20260627_glm52_axolotl_8bit_moe_lora_chunk_patch2/train.log
+config: configs/axolotl_glm52_8bit_moe_lora_20260627.yml
+output: /home/work/.data/harness1/models/GLM-5.2__Fable-OfficialAgentic-Axolotl-8bit-MoE-LoRA-20260627
+```
+
+첫 unchunked Axolotl 8-bit run은 weight loading 중 `axolotl.monkeypatch.moe_quant` -> `torch.cuda.empty_cache()`에서 CUDA illegal memory access로 실패했다. 원인은 GLM fused expert tensor가 매우 큰 3D tensor인데, 8-bit quantization이 이를 한 번에 `bitsandbytes.int8_vectorwise_quant`로 넘기는 것이다. `scripts/patch_axolotl_moe_8bit_flatten_20260627.py`가 설치된 Axolotl의 `replace_parameter_8bit`을 패치해 3D tensor를 2D row chunks로 나눠 quantize한다. 이 패치 후 active run은 이전 실패 지점인 `54/1344`를 넘어 weight loading을 계속 진행 중이며, 8xH200 VRAM도 약 96-98GiB/GPU까지 사용한다.
 
 ## 공식 목표 Benchmark
 
