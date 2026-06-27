@@ -8,7 +8,29 @@ GLM-5.2-FP8은 8xH200 vLLM serving/eval 용도로 성공했다. 하지만 FP8 ch
 
 2026-06-27 13:59 KST 기준 BF16 원본 다운로드는 완료됐다. 첫 1-step QLoRA smoke는 venv 내부 `bitsandbytes` 누락을 고친 뒤 다시 돌렸고, 다음 단계에서 `device_map=auto`가 일부 module을 CPU/disk로 dispatch하려고 해서 BitsAndBytes guard로 중단됐다. 단순히 `GPU_MAX_MEMORY_GIB=140`, `CPU_MAX_MEMORY_GIB=0`으로 바꿔도 auto estimator가 CPU/disk dispatch를 고집했다. 그래서 runner 기본 device map을 `glm_layers`로 바꾸고, trainer가 78개 `GlmMoeDsaDecoderLayer`를 8개 GPU에 직접 분산하도록 했다. 이 경로는 guard를 넘겼지만 22% load에서 GPU1 OOM으로 실패했다.
 
-업데이트: 로컬 Transformers+BitsAndBytes BF16 QLoRA 경로는 보류한다. GLM MoE expert weight가 `Linear` module이 아니라 raw `Parameter`라 대부분을 4bit로 줄이지 못했고, inspector 기준 BF16 총량은 `1403.19GiB`, raw MoE expert weight는 `1368.00GiB`다. 대신 Axolotl의 GLM/MoE 전용 경로를 사용한다. 현재 유효 경로는 `load_in_8bit: true`, `quantize_moe_experts: true`, FSDP2, LoRA target modules `q_proj,k_proj,v_proj,o_proj`, expert target parameters `mlp.experts.gate_up_proj`, `mlp.experts.down_proj`이다.
+업데이트: 로컬 Transformers+BitsAndBytes BF16 QLoRA 경로는 보류한다. GLM MoE expert weight가 `Linear` module이 아니라 raw `Parameter`라 대부분을 4bit로 줄이지 못했고, inspector 기준 BF16 총량은 `1403.19GiB`, raw MoE expert weight는 `1368.00GiB`다. 이후 Axolotl의 GLM/MoE 전용 경로도 8-bit는 `278/1344` weight loading에서 OOM, 4-bit는 `40/1344`에서 bitsandbytes CUDA 오류로 실패했다. 현재 유지하는 로컬 GLM 경로는 Megatron-SWIFT model-parallel LoRA이며, 아직 성공 checkpoint는 없다.
+
+2026-06-27 Megatron-SWIFT update:
+
+```text
+env: /home/work/.cache/fable_distillation/venvs/glm52-swift-megatron
+runner: scripts/run_glm52_swift_megatron_tp8_lora_20260627.sh
+data: datasets/official_agentic_sft_mix_20260627.swift_agent.jsonl
+rows: 14,374 kept / 5,162 skipped
+template: glm5_2
+agent_template: glm5_1
+latest attempted parallelism: TP=4, PP=2, EP=4
+```
+
+결과:
+
+```text
+BF16 snapshot: model construction OOM before train step
+FP8 snapshot: same OOM because MCore instantiates BF16 trainable parameters
+torch_dtype=float8_e4m3fn: rejected by Swift argument validation
+```
+
+다음 smoke는 offload/CPU-init을 켜서 1개 이상의 train step과 adapter checkpoint 생성을 확인하는 것이다. 자세한 실행 명령은 `GLM52_FABLE_PUBLICATION_AND_NEXT_TRAINING_PLAN_20260627.ko.md`에 둔다.
 
 2026-06-27 Axolotl 8-bit run:
 

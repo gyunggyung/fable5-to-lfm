@@ -61,6 +61,19 @@ GLM-5.2-FP8 다운로드와 Fable/Mythos 스타일 데이터 준비는 끝났다
   - 4-bit logs: `logs/20260627_glm52_axolotl_4bit_moe_qlora_fallback1/train.log`, `logs/20260627_glm52_axolotl_4bit_moe_qlora_flatten_patch2/train.log`
   - 4-bit result: raw and 3D-flatten patched runs both failed at `40/1344` with bitsandbytes CUDA `invalid configuration argument at line 54 in file /src/csrc/ops.cu`.
   - status: no completed GLM-5.2 Fable adapter checkpoint exists from local Axolotl/bitsandbytes runs.
+- Megatron-SWIFT model-parallel LoRA 경로 결과:
+  - env: `/home/work/.cache/fable_distillation/venvs/glm52-swift-megatron`
+  - setup: `scripts/setup_glm52_swift_megatron_env_20260627.sh`
+  - data conversion: `scripts/prepare_swift_glm52_agent_jsonl_20260627.py`
+  - runner: `scripts/run_glm52_swift_megatron_tp8_lora_20260627.sh`
+  - converted data: `datasets/official_agentic_sft_mix_20260627.swift_agent.jsonl`, 14,374 rows kept / 5,162 skipped
+  - template fix: `--template glm5_2 --agent_template glm5_1`
+  - successful setup points: local HF snapshot use, CUDA 12 Transformer Engine import fix, Megatron-SWIFT argument fixes, GLM dataset preprocessing
+  - BF16 TP8/TP4-PP2-EP4 result: model construction OOM before train step, about 139.75-139.80GiB/GPU used
+  - FP8 snapshot result: same construction OOM because MCore still creates BF16 trainable parameters
+  - forced `TORCH_DTYPE=float8_e4m3fn` result: Swift rejects float8 as model `torch_dtype`
+  - current status: no completed GLM-5.2 Fable adapter checkpoint exists from Megatron-SWIFT either
+  - next smoke: offload/CPU-init path documented in `GLM52_FABLE_PUBLICATION_AND_NEXT_TRAINING_PLAN_20260627.ko.md`
 
 ## 현재 상태
 
@@ -69,7 +82,7 @@ GLM-5.2-FP8 다운로드와 Fable/Mythos 스타일 데이터 준비는 끝났다
 - GLM snapshot: `/home/work/.data/huggingface/hub/models--zai-org--GLM-5.2-FP8/snapshots/70311cfa0158cce7dd2cf5d2e04f68e3fdc3efc1`
 - GLM cache size: 약 `707G`
 - BF16 GLM-5.2 snapshot: safetensors `282` shards, snapshot `f2263102df303b2faa54a6861a29d1770ce846c0`
-- GPU 상태: 현재 GLM Axolotl 학습 프로세스 없음. GPU 메모리는 1MiB 수준으로 회수됨.
+- GPU 상태: 현재 GLM Axolotl/Megatron-SWIFT 학습 프로세스 없음. GPU 메모리는 1MiB 수준으로 회수됨.
 - Git 상태: 로컬 `main`은 `origin/main`보다 여러 커밋 앞섬.
 - Push 상태: HTTPS GitHub credential 없음으로 실패. 에러는 `fatal: could not read Username for 'https://github.com': No such device or address`.
 
